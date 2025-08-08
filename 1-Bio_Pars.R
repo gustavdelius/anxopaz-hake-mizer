@@ -71,7 +71,11 @@ a25 <- laf( L25, Linf, Kvb, al0)
 w50 <- lwf( L50, a, b)
 w25 <- lwf( L25, a, b)
 
-U <- log(3)/log(w50/w25)
+kmat_f <- MatSize['k','Females']
+kmat_m <- MatSize['k','Males']
+kmat <- (kmat_m+kmat_f)/2; kmat
+
+U <- kmat*L50/b
 
 w_max <- lwf( bins_no, a, b)
 
@@ -120,6 +124,14 @@ species_params(bio_pars)$M <- mu0_nls
 
 
 # Save ----------------
+
+rm_functions <- function( envir = globalenv()) {
+  objs <- ls( envir = envir)
+  funs <- objs[sapply(objs, function(x) is.function(get(x, envir = envir)))]
+  rm(list = funs, envir = envir)
+}
+
+rm_functions()
 
 save.image( './input/Bio_Pars.RData')
 

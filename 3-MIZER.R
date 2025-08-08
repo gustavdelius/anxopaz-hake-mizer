@@ -52,14 +52,9 @@ bio_pars <- setBevertonHolt( bio_pars,        # Rdd = Rdi * (Rmax/(Rdi+Rmax))
 
 # MIZER model --------------------------------
 
-## Match for biomass and growth ---------------
-
 hake_model <- bio_pars |>
   calibrateBiomass() |> matchBiomasses() |> matchGrowth() |> steady() |>
-  calibrateBiomass() |> matchBiomasses() |> matchGrowth() |> steady() 
-
-
-## Catch data by fishing gear ----------------
+  calibrateBiomass() |> matchBiomasses() |> matchGrowth() |> steady()
 
 gear_names <- Catch$fleet
 
@@ -89,104 +84,107 @@ hake_model <- matchYield( hake_model)
 hake_model <- steady( hake_model)
 
 
-# Fit ------------------- 
 
-pre_obj <- prefit( model = hake_model, catch = LFD, dl = 1, yield_lambda = 1e7)
-pre_obj_m <- prefit( model = hake_model, catch = corLFD, dl = 1, yield_lambda = 1e7)
-
-data_list <- pre_obj$data_list
-pars <- pre_obj$pars
-
-data_list_m <- pre_obj_m$data_list
-pars_m <- pre_obj_m$pars
-
-# save( data_list, pars, file = "./data/prefit.RData")
+# Fit ----------------------
 
 # TMB::compile("./TMB/fit.cpp", flags = "-Og -g", clean = TRUE, verbose = TRUE)
-dyn.load(dynlib("./TMB/fit"))
+source( './scripts/MIZER.R')
 
-obj <- MakeADFun(data = data_list, parameters = pars, DLL = "fit")
-obj_m <- MakeADFun(data = data_list_m, parameters = pars_m, DLL = "fit")
+# nofixed <- c('h','n','ks','p','k','f0','alpha')
+nofixed <- c('h','ks','p','k','f0','alpha','n')
 
-optim_result <- nlminb(obj$par, obj$fn, obj$gr, control = list(trace = 1, eval.max = 10000, iter.max = 10000))
-optim_result_m <- nlminb(obj_m$par, obj_m$fn, obj_m$gr, control = list(trace = 1, eval.max = 10000, iter.max = 10000))
-
-# optim_result <- optimx::optimx(obj$par, obj$fn, obj$gr, control = list(trace = 1, maxit = 10000))
-# optim_result_m <- optimx::optimx(obj_m$par, obj_m$fn, obj_m$gr, control = list(trace = 1, maxit = 10000))
-# hake_model_fitted <- update_params(  hake_model, optim_result[1,], data_list$min_len, data_list$max_len)
-# hake_model_fitted_m <- update_params(  hake_model, optim_result_m[1,], data_list$min_len, data_list$max_len)
+# hake_model_fitted <- MIZER( model = hake_model, catch = corLFD, nofixed = nofixed)
+hake_model_fitted <- MIZER( model = hake_model, catch = corLFD)
 
 
-hake_model_fitted <- update_params( hake_model, optim_result$par, data_list$min_len, data_list$max_len)
-hake_model_fitted_m <- update_params( hake_model, optim_result_m$par, data_list_m$min_len, data_list_m$max_len)
+## Check ---------------------------------------
 
+plot_lfd( hake_model_fitted, corLFD)
+plot_lfd_gear( hake_model_fitted, corLFD)
 
-
-# Check ---------------------------------------
-
-plot_lfd( hake_model, LFD)
-plot_lfd( hake_model_fitted, LFD)
-plot_lfd( hake_model_fitted_m, corLFD)
-
-plot_lfd_gear( hake_model, LFD, 0.17)
-plot_lfd_gear( hake_model_fitted, LFD, 0.12)
-plot_lfd_gear( hake_model_fitted_m, corLFD, 0.12)
-
-getYield( hake_model)
-sum( hake_model_fitted@gear_params$yield_observed)
-sum( hake_model_fitted_m@gear_params$yield_observed)
 getYield( hake_model_fitted)
-getYield( hake_model_fitted_m)
+sum( hake_model_fitted@gear_params$yield_observed)
+getYield( hake_model_fitted)/sum( hake_model_fitted@gear_params$yield_observed)
 
-hake_model_fitted_m@species_params$biomass_observed
-getBiomass( hake_model)
 getBiomass( hake_model_fitted)
-getBiomass( hake_model_fitted_m)
+hake_model_fitted@species_params$biomass_observed
+getBiomass( hake_model_fitted)/hake_model_fitted@species_params$biomass_observed
+
+# model_vector <- as.numeric(species_params(hake_model_fitted)[nofixed])
+# pre_vector <- as.numeric(species_params(hake_model)[nofixed])
+# 
+# biopars <- rbind( model_vector, pre_vector)
+# colnames(biopars) <- nofixed
+# biopars
+# 
+# hake_model_fitted@gear_params
+# 
+# plotSpectra( hake_model_fitted, power = 2) + theme_bw() 
+# 
+# 
+# ### HERE!!!! ---------------
+# 
+# ener <- getEnergy( hake_model_fitted, return_df = TRUE)
+# getEnergy( hake_model_fitted, log = FALSE)
+# 
+# sp <- species_params( hake_model_fitted)
+# wt <- w( hake_model_fitted)
+# 
+# 
+# ## No update??
+# 
+# getMetabolicRate(hake_model_fitted)
+# getMetabolicRate(hake_model_fitted)/(hake_model@species_params$ks*(wt^hake_model@species_params$p))
+# getMetabolicRate(hake_model_fitted)/(sp$ks*(wt^sp$p))
+# getMetabolicRate(hake_model_fitted)/getMetabolicRate(hake_model)
+# getMetabolicRate(bio_pars)/getMetabolicRate(hake_model)
+# 
+# 
+# 
+# ## Then: old ---------------
+# 
+# getEnergy( hake_model)
+# getEnergy( hake_model, log = TRUE)
+# 
+# sp <- species_params( hake_model)
+# wt <- w( hake_model)
+# 
+# emetab <- sp$ks * wt^sp$p
+# eactiv <- sp$k * wt
+# etotal <- sp$alpha*sp$f0*(sp$h*wt^sp$n)
+# ereproandgrowth <- etotal - emetab - eactiv
+# repp <- (wt/sp$w_max)^(1-sp$n)
+# phi <-  (wt/sp$w_max)^(1-sp$n) * (1/(1+(wt/sp$w_mat)^(-sp$U)))
+# egrowth <- ereproandgrowth * (1-phi)
+# erepro <- ereproandgrowth * (phi)
+# 
+# getReproductionProportion(hake_model)/repp
+# getEGrowth(hake_model)/egrowth
+# getMetabolicRate(hake_model)/emetab
+# getEReproAndGrowth(hake_model)/ereproandgrowth
+# getERepro(hake_model)/erepro
 
 
+# Background ---------------
 
-# Steady ------------------
-
-hake_mizer <- scaleDownBackground( hake_model_fitted, 1/8000000)
+hake_mizer <- scaleDownBackground( hake_model_fitted, 2e-7)
 
 plotSpectra( hake_mizer, power = 2) + theme_bw() 
 
-getYield( hake_model)
-sum( hake_mizer@gear_params$yield_observed)
-getYield( hake_mizer)
 
 
-getBiomass( hake_model)
-hake_mizer@species_params$biomass_observed
-getBiomass( hake_mizer)
-
-
-hake_mizer2 <- hake_mizer |>
-  calibrateBiomass() |> matchBiomasses() |> matchGrowth() |> matchYield() |> steady() |>
-  calibrateBiomass() |> matchBiomasses() |> matchGrowth() |> steady()
-
-plot_lfd( hake_mizer2, LFD)
-plot_lfd_gear( hake_mizer2, LFD, 0.17)
-sum( hake_mizer2@gear_params$yield_observed)/ getYield( hake_mizer2)
-hake_mizer2@species_params$biomass_observed/ getBiomass( hake_mizer2)
-getYield( hake_mizer2)
-getBiomass( hake_mizer2)
-
-
-## ## ## ## ## ## ## ##
-
-# catch_lengths<-data.frame(species="Hake",gear=rep(gear_names,each=129),
-#                           length=rep(LFDc$length,9),dl=rep(1,9*129),
-#                           weight=rep(w(hake_model),9),dw=rep(dw(hake_model),9),
-#                           catch=c(LFD$number))
+# # Old MIZER fit --------------------------------
 # 
-# tuneParams( hake_mizer, catch = catch_lengths)
+# ngear <- length(gear_names)
 # 
-# hake_model <- readParams("./output/hake_model.rds")
-# hake_model <- scaleDownBackground( hake_model, 1/8000000)
-
-
-
+# catch_lengths <- data.frame( species = "Hake",gear = rep(gear_names,each=bins_no), 
+#   length = rep(LFDc$length,ngear), dl = 1, weight = rep(w(hake_model),ngear), 
+#   dw = rep(dw(hake_model),ngear), catch = c(LFD$number))
+# 
+# # tuneParams( hake_mizer, catch = catch_lengths)
+# # 
+# # hake_model <- readParams("./output/hake_model.rds")
+# # hake_model <- scaleDownBackground( hake_model, 1/8000000)
 
 
 

@@ -1,17 +1,10 @@
-// This is the code that defines the objective function, returning the negative log-likelihood value.
-// This function is still a work in progress, as the R session crashes when calling from 
-// prepare_TMB_objective_function2.R; the crash is produced by the definition of the 'calculate_growth'
-// function in line 52, even if the obj. function (line 186) call to calculate_growth (and everything
-// else) is commented.
 
 #include <TMB.hpp>
 
 template<class Type>
-vector<Type> calculate_F_mort(Type logit_l50, Type log_ratio_left, 
-                              Type log_l50_right_offset, Type log_ratio_right,
-                              Type log_catchability, vector<Type> blength, 
-                              Type min_len, Type max_len) {
-  
+vector<Type> calculate_F_mort(Type logit_l50, Type log_ratio_left, Type log_l50_right_offset, Type log_ratio_right,
+                              Type log_catchability, vector<Type> blength, Type min_len, Type max_len) 
+{
   Type l50 = min_len + (max_len - min_len) * invlogit(logit_l50);  
   Type l25 = l50 * (1 - exp(log_ratio_left)); 
   
@@ -42,28 +35,64 @@ vector<Type> calculate_F_mort(Type logit_l50, Type log_ratio_left,
 
 
 template<class Type>
-vector<Type> calculate_mort(vector<Type> total_F_mort, Type M, Type d, vector<Type> weight)
+vector<Type> calculate_mort(vector<Type> total_F_mort, Type log_M, Type d, vector<Type> weight)
 {
+  Type M = exp(log_M);
   vector<Type> mort = M * pow(weight, d) + total_F_mort;
   return mort;
 }
 
 
 template<class Type>
-vector<Type> calculate_growth(vector<Type> EReproAndGrowth, vector<Type> repro_prop,
-                              Type w_mat, Type U, vector<Type> weight)
+vector<Type> calculate_erepro(vector<Type> weight, Type log_h, Type log_n, Type log_ks, Type log_p, Type log_k, 
+                              Type log_f0, Type log_alpha)
 {
+  Type h = exp(log_h);
+  Type n = Type(1.0) / (Type(1.0) + exp(-log_n));
+  Type ks = exp(log_ks);
+  Type p = exp(log_p);
+  Type k = exp(log_k);
+  Type alpha = Type(1.0) / (Type(1.0) + exp(-log_alpha));
+  Type f0 = Type(1.0) / (Type(1.0) + exp(-log_f0));
+  vector<Type> encounter = h * pow(weight, n);
+  vector<Type> metab = ks * pow(weight, p) + k * weight;
+  vector<Type> erepro = alpha * f0 * encounter - metab;
+  return erepro;
+}
+
+
+template<class Type>
+vector<Type> calculate_repro_prop(vector<Type> weight, Type log_w_mat, Type log_n)
+{
+  Type w_mat = exp(log_w_mat);
+  Type n = Type(1.0) / (Type(1.0) + exp(-log_n));
+  vector<Type> reprop = pow(weight / w_mat, Type(1.0) - n);
+  
+  Type max_val = reprop[0];
+  for(int i = 1; i < reprop.size(); i++) {
+    if(reprop[i] > max_val) max_val = reprop[i];
+  }
+  
+  vector<Type> repro_prop = reprop / max_val;
+  
+  return repro_prop;
+}
+
+
+template<class Type>
+vector<Type> calculate_growth(vector<Type> erepro, vector<Type> repro_prop, Type log_w_mat, Type log_U, vector<Type> weight)
+{
+  Type w_mat = exp(log_w_mat);
+  Type U = exp(log_U);
   Type c1 = Type(1.0);
   vector<Type> psi = repro_prop / (c1 + pow(weight / w_mat, -U));
-  vector<Type> growth = EReproAndGrowth * (c1 - psi);
+  vector<Type> growth = erepro * (c1 - psi);
   return growth;
 }
 
 
 template<class Type>
-vector<Type> calculate_N(vector<Type> mort, vector<Type> growth,
-                         Type biomass,
-                         vector<Type> bin_widths,
+vector<Type> calculate_N(vector<Type> mort, vector<Type> growth, Type biomass, vector<Type> bin_widths,
                          vector<Type> weight)
 {
   int size = bin_widths.size();
@@ -85,9 +114,9 @@ vector<Type> calculate_N(vector<Type> mort, vector<Type> growth,
 template<class Type>
 vector<Type> calculate_catch_per_bin(vector<Type> N, vector<Type> F_mort, vector<Type> bin_widths)
 {
-
+  
   vector<Type> densities = N * F_mort;
-  int num_bins = bin_widths.size(); // Number of bins
+  int num_bins = bin_widths.size();
   vector<Type> catch_per_bin(num_bins);
   for (int i = 0; i < num_bins; ++i) {
     catch_per_bin[i] = bin_widths[i] * densities[i];
@@ -96,8 +125,7 @@ vector<Type> calculate_catch_per_bin(vector<Type> N, vector<Type> F_mort, vector
 }
 
 template<class Type>
-Type calculate_yield(vector<Type> catch_per_bin,
-                     vector<Type> weight)
+Type calculate_yield(vector<Type> catch_per_bin, vector<Type> weight)
 {
   Type model_yield = Type(0.0);
   for (int i = 0; i < catch_per_bin.size(); ++i) {
@@ -110,55 +138,64 @@ template<class Type>
 Type objective_function<Type>::operator() ()
 {
   // **Data Section**
-  DATA_MATRIX(counts);               // Counts per gear, dimensions: n_bins x n_g
-  DATA_VECTOR(bin_widths);           // Width of each bin in grams
-  DATA_VECTOR(bin_boundaries);       // Boundaries of each bin in grams
-  DATA_VECTOR(weight);               // Mid of each bin in grams
-  DATA_VECTOR(blength);              // Mid of each bin in grams
-  DATA_VECTOR(bin_boundary_lengths); // Boundaries of each bin in cm
-  DATA_VECTOR(yield);                // Observed yield
-  DATA_SCALAR(biomass);              // Observed biomass
-  DATA_VECTOR(EReproAndGrowth);      // The rate at which energy is available for growth and reproduction
-  DATA_VECTOR(repro_prop);           // Proportion of energy allocated to reproduction
-  DATA_SCALAR(w_mat);
-  DATA_SCALAR(d);                    // Exponent of mortality power-law
-  DATA_SCALAR(yield_lambda);         // controls the strength of the penalty for deviation from the observed yield.
-  DATA_INTEGER(n_g);                 // Number of gears
-  DATA_SCALAR(M);
-  DATA_SCALAR(U);
+  DATA_MATRIX(counts);
+  DATA_VECTOR(bin_widths);
+  DATA_VECTOR(weight);
+  DATA_VECTOR(blength);
+  DATA_VECTOR(yield);
+  DATA_SCALAR(biomass);
   DATA_SCALAR(min_len);
   DATA_SCALAR(max_len);
+  DATA_SCALAR(yield_lambda);
+  DATA_SCALAR(biomass_lambda);
+  DATA_INTEGER(n_g);
   
   // **Parameter Section**
-  PARAMETER_VECTOR(logit_l50);            // Length n_g
-  PARAMETER_VECTOR(log_ratio_left);       // Length n_g
-  PARAMETER_VECTOR(log_l50_right_offset); // Length n_g
-  PARAMETER_VECTOR(log_ratio_right);      // Length n_g
-  PARAMETER_VECTOR(log_catchability);     // Length n_g
+  PARAMETER_VECTOR(logit_l50);
+  PARAMETER_VECTOR(log_ratio_left);
+  PARAMETER_VECTOR(log_l50_right_offset);
+  PARAMETER_VECTOR(log_ratio_right);
+  PARAMETER_VECTOR(log_catchability); 
+  
+  PARAMETER(log_U);
+  PARAMETER(log_M);
+  PARAMETER(d);
+  PARAMETER(log_h);
+  PARAMETER(log_n);
+  PARAMETER(log_ks);
+  PARAMETER(log_p);
+  PARAMETER(log_k);
+  PARAMETER(log_f0);
+  PARAMETER(log_alpha);
+  PARAMETER(log_w_mat);
+  
   
   int n_bins = bin_widths.size();
-  int n_bin_boundaries = bin_boundaries.size();
   
   vector<Type> total_F_mort(n_bins);
-  total_F_mort.setZero(); // initialize to zero
+  total_F_mort.setZero(); 
   matrix<Type> F_mort_mat(n_bins, n_g);
   for (int g = 0; g < n_g; ++g) {
     vector<Type> F_mort_g = calculate_F_mort(
       logit_l50[g], log_ratio_left[g], log_l50_right_offset[g], log_ratio_right[g], log_catchability[g], blength, min_len, max_len);
     for (int i = 0; i < n_bins; ++i) {
-      F_mort_mat(i, g) = F_mort_g(i); // Store each gear's F_mort in matrix for later use in 'calculate_catch_per_bin'
-      total_F_mort(i) += F_mort_g(i); // Total F_mort is added when calculating overall mortality in 'calculate_mort'
+      F_mort_mat(i, g) = F_mort_g(i);
+      total_F_mort(i) += F_mort_g(i);
     }
   }
   
-  vector<Type> mort = calculate_mort(total_F_mort, M, d, weight);
+  vector<Type> mort = calculate_mort(total_F_mort, log_M, d, weight);
   
-  vector<Type> growth = calculate_growth(EReproAndGrowth, repro_prop, w_mat, U, weight);
+  vector<Type> erepro = calculate_erepro(weight, log_h, log_n, log_ks, log_p, log_k, log_f0, log_alpha);
+  
+  vector<Type> repro_prop = calculate_repro_prop(weight, log_w_mat, log_n);
+  
+  vector<Type> growth = calculate_growth(erepro, repro_prop, log_w_mat, log_U, weight);
   
   vector<Type> N = calculate_N(mort, growth, biomass, bin_widths, weight);
   
   matrix<Type> catch_per_bin_mat(n_bins, n_g);
-
+  
   for (int g = 0; g < n_g; ++g) {
     
     Eigen::Matrix<Type, Eigen::Dynamic, 1> F_mort_column = F_mort_mat.col(g);
@@ -170,24 +207,27 @@ Type objective_function<Type>::operator() ()
     
     vector<Type> catch_per_bin_g = calculate_catch_per_bin(N, F_mort_g, bin_widths);
     catch_per_bin_mat.col(g) = catch_per_bin_g;
+  
   }
   
   vector<Type> model_yield_g(n_g);
-
+  
   for (int g = 0; g < n_g; ++g) {
     
     Eigen::Matrix<Type, Eigen::Dynamic, 1> catch_per_bin_column = catch_per_bin_mat.col(g);
-
+    
     vector<Type> catch_per_bin_g(n_bins);
     for (int i = 0; i < n_bins; i++) {
       catch_per_bin_g(i) = catch_per_bin_column(i);
     }
-
+    
     Type yield_g = calculate_yield(catch_per_bin_g, weight);
     model_yield_g(g) = yield_g;
+    
   }
   
   Type nll = Type(0.0);
+  
   for (int g = 0; g < n_g; ++g) {
     vector<Type> catch_per_bin_g = catch_per_bin_mat.col(g);
     vector<Type> counts_g = counts.col(g);
@@ -198,11 +238,18 @@ Type objective_function<Type>::operator() ()
     Type nll_g = -dmultinom(counts_g, probs_g, true);
     
     nll_g += yield_lambda * pow(log(model_yield_g(g) / yield(g)), Type(2));
-
+    
     nll += nll_g;
   }
   
-  TMBAD_ASSERT(nll >= 0);
+  
+  // Type biomass_model = Type(0.0);
+  // for (int i = 0; i < N.size(); ++i) {
+  //   biomass_model += N(i) * bin_widths(i) * weight(i);
+  // }
+  // nll += biomass_lambda * pow(log(biomass_model / biomass), Type(2));
+
+  // TMBAD_ASSERT(nll >= 0);
   TMBAD_ASSERT(CppAD::isfinite(nll));
   if (!CppAD::isfinite(nll)) error("nll is not finite");
   

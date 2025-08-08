@@ -53,7 +53,8 @@ aver_y <- 2014:2023
 years <- list( aver_y = aver_y,
                tp1 = 1996:2000,
                tp2 = 2008:2012,
-               tp3 = 2019:2023)
+               tp3 = 2019:2023,
+               aver_y2 = aver_y-20)
 
 
 # Ordered gears --------------------

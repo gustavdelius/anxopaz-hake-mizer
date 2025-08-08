@@ -13,7 +13,7 @@ fdata$month <- as.factor(fdata$month)
 
 last <- unique(fdata$year)
 
-MatSize <- matrix( NA, 2, 2, dimnames = list( c('L50','L25'), c('Males','Females')))
+MatSize <- matrix( NA, 3, 2, dimnames = list( c('L50','L25', 'k'), c('Males','Females')))
 
 for( i in c(1,2)){
   
@@ -73,33 +73,12 @@ for( i in c(1,2)){
  
   MatSize['L50',i] <- - intercept/coef_lt
   MatSize['L25',i] <- (log(0.25 / (1 - 0.25)) - intercept) / coef_lt
+  MatSize['k',i] <- coef_lt
   
 }
 
 
 MatSize  
-
-lengths <- 0:129
-males <- 1/(1+exp(log(3)*((MatSize['L50','Males']-lengths)/(MatSize['L50','Males']-MatSize['L25','Males']))))
-females <- 1/(1+exp(log(3)*((MatSize['L50','Females']-lengths)/(MatSize['L50','Females']-MatSize['L25','Females']))))
-weights <- 0.00377*lengths^3.168
-
-msplot <- data.frame( Length = lengths, Weight = weights, Male = males, Female = females)
-
-msplot <- msplot %>% pivot_longer( cols = Male:Female, names_to = "Model", values_to = "Maturity")
-
-lmplot <- msplot %>% ggplot( aes( x = Length, y = Maturity, col = Model)) + 
-  geom_line( ) + theme_bw() + labs( x = "Length (cm)", color= "Sex")
-lmplot
-
-wmplot <- msplot %>% ggplot( aes( x = Weight, y = Maturity, col = Model)) + 
-  geom_line( ) + theme_bw() + labs( x = "Weight (g)", color= "Sex")
-wmplot
-
-logwmplot <- msplot[-c(1:2),] %>% ggplot( aes( x = Weight, y = Maturity, col = Model)) + scale_x_log10() +
-  geom_line( ) + theme_bw() + labs( x = "log( weight (g))", color= "Sex") 
-logwmplot
-
 
 source( './scripts/aux_functions.R')
 
@@ -112,7 +91,6 @@ grpars <- readLines("./data/WGBIE24/Report.sso")
 pos <- grep("^Growth_Parameters report:45", grpars)
 grpars <- grpars[(pos + 1):(pos + 4 + 1)]
 grpars <- read.table(text = paste(grpars, collapse = "\n"), header = TRUE)
-
 
 a <- grpars$WtLen1[1] * 1e3; a   # 0.00377 (kg to g)
 b <- grpars$WtLen2[1]; b        # 3.168 
@@ -141,11 +119,48 @@ a25 <- laf( L25, Linf, Kvb, al0)
 w50 <- lwf( L50, a, b)
 w25 <- lwf( L25, a, b)
 
+kmat_f <- MatSize['k','Females']
+kmat_m <- MatSize['k','Males']
+kmat <- (kmat_m+kmat_f)/2; kmat
+
+U <- kmat*L50/b
+
+lengths <- 0:129
+weights <- lwf( lengths, a, b)
+
+# males <- 1/(1+exp(log(3)*((MatSize['L50','Males']-lengths)/(MatSize['L50','Males']-MatSize['L25','Males']))))
+# females <- 1/(1+exp(log(3)*((MatSize['L50','Females']-lengths)/(MatSize['L50','Females']-MatSize['L25','Females']))))
+
+males <- 1/(1+exp(-kmat_m*(lengths-L50_m)))
+females <- 1/(1+exp(-kmat_f*(lengths-L50_f)))
+
+meanmf <-  1/(1+exp(-kmat*(lengths-L50)))
+mizer <- 1/(1+(weights/w50)^(-U))
+
+msplot <- data.frame( Length = lengths, Weight = weights, 
+  Male = males, Female = females, Mean = meanmf, Mizer = mizer)
+
+msplot <- msplot %>% pivot_longer( cols = Male:Mizer, names_to = "Model", values_to = "Maturity")
+
+lmplot <- msplot %>% ggplot( aes( x = Length, y = Maturity, col = Model)) + 
+  geom_line( ) + theme_bw() + labs( x = "Length (cm)", color= "Sex")
+lmplot
+
+wmplot <- msplot %>% ggplot( aes( x = Weight, y = Maturity, col = Model)) + 
+  geom_line( ) + theme_bw() + labs( x = "Weight (g)", color= "Sex")
+wmplot
+
+logwmplot <- msplot[-c(1:2),] %>% ggplot( aes( x = Weight, y = Maturity, col = Model)) + scale_x_log10() +
+  geom_line( ) + theme_bw() + labs( x = "log( weight (g))", color= "Sex") 
+logwmplot
+
 lmplot + geom_vline( xintercept = c(L50_f, L50_m, L50), linetype = c( 'dashed', 'dashed', 'solid')) +
-  geom_hline( yintercept = c(0.5), linetype = 'dashed')
+  # geom_vline( xintercept = c(L25_f, L25_m, L25), linetype = c( 'dashed', 'dashed', 'solid'), color = 'red') +
+  geom_hline( yintercept = c(0.25,0.5), linetype = 'dashed')
 
 logwmplot + geom_vline( xintercept = c(lwf( L50_m, a, b), lwf( L50_f, a, b), w50), linetype = c( 'dashed', 'dashed', 'solid')) +
-  geom_hline( yintercept = c(0.5), linetype = 'dashed')
+  # geom_vline( xintercept = c(lwf( L25_m, a, b), lwf( L25_f, a, b), w25), linetype = c( 'dashed', 'dashed', 'solid'), color = 'red') +
+  geom_hline( yintercept = c(0.25, 0.5), linetype = 'dashed')
 
 
 pdf("./plots/data/maturity.pdf", width = 10, height = 6, onefile = TRUE)

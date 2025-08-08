@@ -38,7 +38,7 @@ b <- sspars['Wtlen_2_Fem_GP_1','Value']
 
 # Plot check
 
-SSplotBiology( ss_stk, subplots = 1)
+r4ss::SSplotBiology( ss_stk, subplots = 1)
 lines( 0:15, ss_stk$endgrowth$Len_Beg[1:16], col='black')
 lines( seq( 0, 15, length.out=500), alf( seq( 0, 15, length.out=500), Linf_f, Kvb, al0_f), col = 'green')
 lines( laf( seq( 0, Linf_f, length.out=500), Linf_f, Kvb, al0_f), seq( 0, Linf_f, length.out=500), col='darkgreen', lty = 'dashed')

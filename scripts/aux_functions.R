@@ -1,24 +1,24 @@
 ### Von Bertalanffy
 
-alf <- function( a, linf, K, al0) { linf * ( 1 - exp( -K * (a - al0)))}
-laf <- function( l, linf, K, al0) { al0 - log(1 - l / linf) / K}
+alf <- function( a, linf, K, al0)  linf * ( 1 - exp( -K * (a - al0)))
+laf <- function( l, linf, K, al0)  al0 - log(1 - l / linf) / K
 
 
 ### Weight - Length
 
-lwf <- function( l, a, b) { a*l^b}
-wlf <- function( w, a, b) { (w/a)^(1/b)}
+lwf <- function( l, a, b)  a*l^b
+wlf <- function( w, a, b) (w/a)^(1/b)
 
 
 ### Logistic function: f(x) = 1 / (1 + exp(-b (x - c)))
 
-logf <- function(x, s, a50) { 1 / (1 + exp( -s * (x - a50)))}
-logf_shift <- function(x, s, a50, shift) { 1 / (1 + exp( -s * (x - a50 - shift)))}
+logf <- function(x, s, a50)  1 / (1 + exp( -s * (x - a50)))
+logf_shift <- function(x, s, a50, shift)  1 / (1 + exp( -s * (x - a50 - shift)))
 
 
 ### Line equation
 
-linef <- function( x, L0, L1, M0, M1) { M0 + (M1-M0)*(x-L0)/(L1-L0)}
+linef <- function( x, L0, L1, M0, M1)  M0 + (M1-M0)*(x-L0)/(L1-L0)
 
 
 ### Power Low function
@@ -26,17 +26,18 @@ linef <- function( x, L0, L1, M0, M1) { M0 + (M1-M0)*(x-L0)/(L1-L0)}
 powerlow <- lwf
 
 
-# Double Normal Length
-
-# 'params' vector elements:
-# 1: location of ascending peak
-# 2: logistic scale width of plateau
-# 3: ascending slope log scale value (slope = exp(p[3]))
-# 4: descending slope log scale value (slope = exp(p[4]))
-# 5: sel value at initial bin;
-# 6: sel value at final bin;
+### Double Normal Length
 
 double_normal_length <- function( w, params, species_params) {
+  
+  # 'params' vector elements:
+  # 1: location of ascending peak
+  # 2: logistic scale width of plateau
+  # 3: ascending slope log scale value (slope = exp(p[3]))
+  # 4: descending slope log scale value (slope = exp(p[4]))
+  # 5: sel value at initial bin;
+  # 6: sel value at final bin;
+  
   # Preemptive checks
   assert_that(is.numeric(w) && is.numeric(params))
   assert_that(params[1] > 0)
@@ -45,10 +46,10 @@ double_normal_length <- function( w, params, species_params) {
   # Weight-length conversion
   a <- species_params[["a"]]
   b <- species_params[["b"]]
-  if (is.null(a) || is.null(b)) {
-    stop("The selectivity function needs the weight-length parameters ", 
-         "`a` and `b` to be provided in the species_params data frame.")
-  }
+  # if (is.null(a) || is.null(b)) {
+  #   stop("The selectivity function needs the weight-length parameters ", 
+  #        "`a` and `b` to be provided in the species_params data frame.")
+  # }
   l <- (w/a)^(1/b)
   
   # Extract parameters
@@ -88,151 +89,126 @@ double_normal_length <- function( w, params, species_params) {
 }
 
 
-plot_lfd <- function( params, catch, dl=1) {
+### Energies
+
+getEnergy <- function( model, return_df = FALSE, log = FALSE){
+  
+  sp <- species_params(model)
+  wt <- w(model)
+  
+  merepro <- as.numeric(getERepro(model))
+  mrepp <- as.numeric(getReproductionProportion(model))
+  mgrowth <- as.numeric(getEGrowth(model))
+  mmetab <- as.numeric(getMetabolicRate(model))
+  merg <- as.numeric(getEReproAndGrowth(model))
+    
+  metab <- sp$ks * wt^sp$p
+  activ <- sp$k * wt
+  totale <- sp$alpha*sp$f0*(sp$h*wt^sp$n)
+  ereproandgrowth <- totale-metab-activ
+  repp <- ((wt/sp$w_max)^(1-sp$n))
+  phi <- (1/(1+(wt/sp$w_mat)^(-sp$U))) * (wt/sp$w_max)^(1-sp$n)
+  
+  egrowth <- ereproandgrowth * (1-phi)
+  erepro <- ereproandgrowth * (phi)
+  
+  
+  dafr <- rbind( data.frame( ERepro = erepro, ReproProp = repp, EGrowth = egrowth, EReproandGrowth = ereproandgrowth,  
+                             Weight = wt, Type = 'By Hand'),
+                 data.frame( ERepro = merepro, ReproProp = mrepp, EGrowth = mgrowth, EReproandGrowth = merg, 
+                             Weight = wt, Type = 'MIZER'))
+  
+  dafr_long <- dafr %>% pivot_longer( cols = c(ERepro, ReproProp, EGrowth, EReproandGrowth),
+      names_to = "Variable", values_to = "Value")
+  
+  pl <- ggplot( dafr_long, aes(x = Weight, y = Value, color = Type)) +
+    geom_line() + facet_wrap(~ Variable, scales = "free_y", ncol = 1) +
+    theme_bw() + theme( legend.title = element_blank(), strip.text = element_text(face = "bold")) +
+    labs(y = NULL) + guides(color = guide_legend(title = NULL, override.aes = list(alpha = 1)))
+  
+  if(log) pl <- pl + scale_x_log10()
+  
+  print(pl)
+  
+  if( return_df) return(dafr)
+  
+}
+
+
+### Plots LFDs
+
+plot_lfd <- function( model, catch, return_df = FALSE) {
   
   heights <- aggregate(number ~ length, data = catch, FUN = sum)$number / sum(catch$number)
   
-  plot( NULL, xlim = c(min(catch$length) - dl, max(catch$length) + dl),
-        ylim = c(0, max(heights)), xlab = "Length [cm]", ylab = "Density",
-        main = "Histogram with Areas Representing Counts")
+  lengths <- (model@w / model@species_params$a)^(1/model@species_params$b)
   
-  rect( catch$length - dl/2, 0, catch$length + dl/2, heights, col = "blue", border = "blue")
-  # rect( catch$length, 0, catch$length + dl, heights, col = "blue", border = "blue")
+  model_catch <- model@initial_n * getFMort(model)
+  model_catch <- model_catch  / sum(model_catch * model@dw)
+  model_catch <- model_catch * model@species_params$b * model@w / lengths
   
-  lengths <- (params@w / params@species_params$a)^(1/params@species_params$b)
+  df <- rbind( data.frame( Length = unique(catch$length), Density = heights, Type = 'Observed'),
+               data.frame( Length = lengths, Density = as.numeric(model_catch), Type = 'Estimated'))
   
-  model_catch <- params@initial_n * getFMort(params)
-  model_catch <- model_catch  / sum(model_catch * params@dw)
-  model_catch <- model_catch * params@species_params$b * params@w / lengths
+  pl <- ggplot( df, aes(x = Length, y = Density, color = Type, fill = Type)) + 
+    geom_bar(data = subset(df, Type != 'Estimated'), stat = "identity", position = "dodge", alpha = 0.6) + 
+    geom_line(data = subset(df, Type == 'Estimated'), linewidth = 1) + theme_bw() +
+    labs( x = "Size [cm]", y = "Normalised number density [1/cm]", color = NULL, fill = NULL)
   
-  lines(lengths, model_catch, col = 'red', lwd = 2)
-  legend('topright', legend = c('Observed', 'Modelled'), col = c('blue', 'red'), lwd = 2)
-
+  print(pl)
+  
+  if(return_df) return(df)
+  
 }
 
-
-plot_lfd_gear <- function( model, catch, maxlim = max( catch$number/sum(catch$number))*unieu(catch$fleet)){
-
-  plist <- list()
-  gear_names <- unique(catch$fleet)
-
-  for( i in gear_names){ 
+plot_lfd_gear <- function( model, catch, return_df = FALSE){
+  
+  params <- validParams(model)
+  
+  s <- params@species_params['species']
+  a <- as.numeric(params@species_params["a"])
+  b <- as.numeric(params@species_params["b"])
+  w <- params@w
+  l <- wlf(w,a,b)
+  gears <- unique(catch$fleet)
+  glength <- length(gears)
+  
+  df <- NULL
+  
+  for( i in 1:glength){
     
-    iLFD <- catch %>% filter( fleet == i)
-    iLFD$catch <- iLFD$number; iLFD$dl <- 1; iLFD$species <- 'Hake'; iLFD$gear <- iLFD$fleet
+    igear <- gears[i]
     
-    plist[[i]] <- plotYieldVsSize( model, species="Hake", gear=i, catch=iLFD, x_var="Length", return_data=FALSE) + 
-      theme_bw() + theme(legend.position = "none",axis.title.x=element_blank()) + coord_cartesian(ylim = c(0, maxlim))
+    f_mort <- getFMortGear(params)[i,1,]
+    
+    catch_w <- f_mort * params@initial_n[1,]
+    catch_w <- catch_w/sum(catch_w * params@dw)
+    catch_l <- catch_w * b * w/l
+    
+    df <- rbind(df, data.frame( Weight=w, Length=l, Catch_w=catch_w, Catch_l=catch_l, 
+                                Gear=igear, Type="Estimated"))
+    
+    cind <- which(catch$fleet==igear)
+    
+    len <- catch$length[cind]
+    catch_l <- catch$number[cind]
+    catch_l <- catch_l/sum(catch_l)
+    wei <- catch$weight[cind]
+    catch_w <- catch_l/b * len/wei
+    
+    df <- rbind(df, data.frame(Weight=wei, Length=len, Catch_w=catch_w, Catch_l=catch_l, 
+                               Gear=igear, Type = "Observed"))
     
   }
   
-  do.call( gridExtra::grid.arrange, c(plist, ncol = 3))
+  pl <-   ggplot( df, aes(x = Length, y = Catch_l, color = Type, fill = Type)) + 
+    geom_bar(data = subset(df, Type != 'Estimated'), stat = "identity", position = "dodge", alpha = 0.6) + 
+    geom_line(data = subset(df, Type == 'Estimated'), linewidth = 1) + theme_bw() +
+    facet_wrap( ~Gear) + theme_bw() + 
+    labs( x = "Size [cm]", y = "Normalised number density [1/cm]", color = NULL, fill = NULL)
   
-}
-
-
-prefit <- function( model, catch, dl = 1, yield_lambda = 1e7) {
+  print(pl)
   
-  params <- validParams(model)
-  sp <- params@species_params
+  if(return_df) return(df)
   
-  gears <- unique(catch$fleet)
-  n_g <- length(gears)
-  
-  lengths <- unique(catch$length)
-  weights <- sp$a * lengths^sp$b
-  
-  bins <- data.frame( bin_start = lengths-dl/2, bin_end = lengths+dl/2)
-  # bins <- data.frame( bin_start = lengths, bin_end = lengths+dl)
-  
-  counts <- catch %>% pivot_wider( names_from = fleet, values_from = number, values_fill = 0)
-  counts <- as.matrix(counts[,gears])
-  
-  l_bins <- c( bins[,1], bins[nrow(bins),2]) 
-  w_bins <- sp$a * l_bins^sp$b
-  
-  w_bin_widths <- diff(w_bins)
-  
-  EReproAndGrowth <- approx(w(params), getEReproAndGrowth(params), xout = weights, rule = 2)$y
-  repro_prop <- approx(w(params), repro_prop(params), xout = weights, rule = 2)$y
-  repro_prop <- repro_prop / max(repro_prop)
-  
-  data_list <- list( counts = counts, 
-                     bin_widths = w_bin_widths, 
-                     bin_boundaries = w_bins, 
-                     bin_boundary_lengths = l_bins,
-                     weight = weights, 
-                     blength = lengths, 
-                     yield = params@gear_params$yield_observed, 
-                     biomass = sp$biomass_observed, 
-                     EReproAndGrowth = EReproAndGrowth, 
-                     repro_prop = repro_prop, 
-                     w_mat = sp$w_mat, 
-                     d = sp$d, 
-                     yield_lambda = yield_lambda, 
-                     n_g = n_g, 
-                     M = sp$M, 
-                     U = sp$U,
-                     min_len = min(l_bins), 
-                     max_len = max(l_bins) )
-  
-  gp <- gear_params(model)
-  
-  pars <- list(
-    logit_l50 = qlogis((gp$l50 - min(l_bins))/(max(l_bins) - min(l_bins))),
-    log_ratio_left = log((gp$l50 - gp$l25)/gp$l50),
-    log_l50_right_offset = log(pmax(1e-3, gp$l50_right - gp$l50)),
-    log_ratio_right = log((gp$l25_right - gp$l50_right)/gp$l50_right),
-    log_catchability = log(gp$catchability))
-  
-  return(list(data_list = data_list, pars = pars))
-  
-}
-
-
-update_params <- function( model, pars, lmin, lmax) {
-  
-  sp <- model@species_params
-  gp <- model@gear_params
-  
-  logit_l50 <- as.numeric(pars[grep('logit_l50', names(pars))])
-  log_ratio_left <- as.numeric(pars[grep('log_ratio_left', names(pars))])
-  log_l50_right_offset <- as.numeric(pars[grep('log_l50_right_offset', names(pars))])
-  log_ratio_right <- as.numeric(pars[grep('log_ratio_right', names(pars))])
-  log_catchability <- as.numeric(pars[grep('log_catchability', names(pars))])
-  
-  l50 <- lmin + (lmax - lmin) * plogis(logit_l50)
-  l25 <- l50 * (1 - exp(log_ratio_left))
-  l50_right <- l50 + exp(log_l50_right_offset)
-  l25_right <- l50_right * (1 + exp(log_ratio_right))
-  catchability <- exp(log_catchability)
-  
-  gp_res <- data.frame( l50 = l50, l25 = l25, l50_right = l50_right, l25_right = l25_right, catchability = catchability)
-  
-  gp[,'l50'] <- gp_res$l50
-  gp[,'l25'] <- gp_res$l25
-  gp[,'l50_right'] <- gp_res$l50_right
-  gp[,'l25_right'] <- gp_res$l25_right
-  gp[,'catchability'] <- gp_res$catchability
-  
-  gear_params(model) <- gp
-  
-  # recalculate the power-law mortality rate
-  # sp$M <- pars["M"]
-  # ext_mort(params)[] <- sp$M * params@w^sp$d
-  
-  # Update the steepness of the maturity ogive
-  # sp$w_mat25 <- sp$w_mat / 3^(1 / U)
-  # model@species_params <- sp
-  # model <- setReproduction(model)
-  
-  # Calculate the new steady state ----
-  model <- steadySingleSpecies(model)
-  
-  # Rescale it to get the observed biomass
-  total <- sum(model@initial_n * model@w * model@dw)
-  factor <- sp$biomass_observed / total
-  model@initial_n <- model@initial_n * factor
-  
-  return(model)
 }
