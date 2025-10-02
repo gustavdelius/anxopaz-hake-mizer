@@ -26,7 +26,7 @@ linef <- function( x, L0, L1, M0, M1)  M0 + (M1-M0)*(x-L0)/(L1-L0)
 powerlow <- lwf
 
 
-### Double Normal Length
+### Double Normal Selectivity
 
 double_normal_length <- function( w, params, species_params) {
   
@@ -85,6 +85,54 @@ double_normal_length <- function( w, params, species_params) {
   
   # Plot and return
   plot(l, sel, col = "red", type = "l", ylab = "Selectivity", xlab = "Length")
+  return(sel)
+}
+
+
+double_logistic <- function(w, pars) {
+  sel_left  <- 1 / (1 + exp(-log(19) * (w - pars[1]) / (pars[1] - pars[2])))
+  sel_right <- 1 / (1 + exp( log(19) * (w - pars[3]) / (pars[4] - pars[3])))
+  sel <- sel_left * sel_right
+  return(sel)
+}
+
+
+double_normal_sel <- function( w, params) {
+  
+  assert_that(is.numeric(w) && is.numeric(params))
+  assert_that(params[1] > 0)
+  assert_that(params[5]>=0, params[5]<=1, params[6]>=0, params[6]<=1)
+  
+  peak1 <- params[1]
+  upselex <- exp(params[3])
+  downselex <- exp(params[4])
+
+  peak2 <- peak1 + (0.99 * max(w) - peak1) / (1 + exp(-params[2]))
+  point1 <- ifelse(params[5] > 0, params[5], NA)
+  point2 <- ifelse(params[6] > 0, params[6], NA)
+
+  t1min <- if (!is.na(point1)) exp(-((min(w) - peak1)^2) / upselex) else NA
+  t2min <- if (!is.na(point2)) exp(-((max(w) - peak2)^2) / downselex) else NA
+  
+  # Vectorized computation for asc and dsc selectivity across x
+  t1 <- w - peak1
+  t2 <- w - peak2
+  join1 <- 1 / (1 + exp(-(20 / (1 + abs(t1))) * t1))
+  join2 <- 1 / (1 + exp(-(20 / (1 + abs(t2))) * t2))
+  
+  # Ascending and descending selectivity calculations
+  asc <- exp(-t1^2 / upselex)
+  dsc <- exp(-t2^2 / downselex)
+  
+  # Scale asc and dsc selectivity if points are defined
+  asc_scl <- if (!is.na(point1)) point1 + (1 - point1) * (asc - t1min) / (1 - t1min) else asc
+  dsc_scl <- if (!is.na(point2)) 1 + (point2 - 1) * (dsc - 1) / (t2min - 1) else dsc
+  
+  # Compute final selectivity using vectorized operations
+  sel <- asc_scl * (1 - join1) + join1 * (1 - join2 + dsc_scl * join2)
+  
+  # Plot and return
+  plot(w, sel, col = "red", type = "l", ylab = "Selectivity", xlab = "Length")
   return(sel)
 }
 
@@ -204,7 +252,7 @@ plot_lfd_gear <- function( model, catch, return_df = FALSE){
   pl <-   ggplot( df, aes(x = Length, y = Catch_l, color = Type, fill = Type)) + 
     geom_bar(data = subset(df, Type != 'Estimated'), stat = "identity", position = "dodge", alpha = 0.6) + 
     geom_line(data = subset(df, Type == 'Estimated'), linewidth = 1) + theme_bw() +
-    facet_wrap( ~Gear) + theme_bw() + 
+    facet_wrap( ~Gear) + 
     labs( x = "Size [cm]", y = "Normalised number density [1/cm]", color = NULL, fill = NULL)
   
   print(pl)
@@ -212,3 +260,75 @@ plot_lfd_gear <- function( model, catch, return_df = FALSE){
   if(return_df) return(df)
   
 }
+
+
+
+plot_wfd <- function( model, catch, return_df = FALSE) {
+  
+  Nw <- as.numeric(model@initial_n)
+  w <- model@w
+  gp <- gear_params(model)
+  
+  Cw_total <- rep(0, length(w))
+  
+  for (i in 1:nrow(gp)) {
+    Fw <- double_logistic(w, as.numeric(gp[i, c("w50", "w25", "w50_right", "w25_right")]))
+    Cw <- Nw * Fw
+    Cw_total <- Cw_total + Cw
+  }
+  
+  Cw_total <- Cw_total / sum(Cw_total * model@dw)
+  df <- data.frame( Weight = w, Catch_w = Cw_total, Type = "Estimated")
+    
+  obs_w <- aggregate(number ~ weight, data = catch, FUN = sum)
+  obs_w$number <- obs_w$number / sum(obs_w$number)
+  
+  df <- rbind(df, data.frame( Weight = obs_w$weight, Catch_w = obs_w$number, Type = "Observed"))
+  
+  pl <- ggplot(df, aes(x = Weight, y = Catch_w, color = Type, fill = Type)) +
+    geom_bar(data = subset(df, Type == "Observed"),
+             stat = "identity", position = "dodge", alpha = 0.6) +
+    geom_line(data = subset(df, Type == "Estimated"), linewidth = 1) +
+    theme_bw() + scale_x_log10(limits = c(1,max(w))) + 
+    labs(x = "Weight [g]", y = "Normalised number density [1/g]", color = NULL, fill = NULL)
+  
+  print(pl)
+  
+  if (return_df) return(df)
+  
+}
+
+plot_wfd_gear <- function( model, catch, return_df = FALSE){
+
+  w <- model@w
+  gp <- gear_params(model)
+  Nw <- as.numeric(model@initial_n)
+  
+  df <- NULL
+  
+  for (i in 1:nrow(gp)) {
+    
+    Fw <- double_logistic(w, as.numeric(gp[i, c("w50", "w25", "w50_right", "w25_right")]))
+    Cw <- Nw * Fw
+    Cw <- Cw / sum(Cw * model@dw)
+    
+    df <- rbind(df, data.frame( Weight = w, Catch_w = Cw, Gear = gp$gear[i], Type = "Estimated"))
+    
+    cind <- which(catch$fleet == gp$gear[i])
+    obs_w <- aggregate(number ~ weight, data = catch[cind, ], FUN = sum)
+    obs_w$number <- obs_w$number / sum(obs_w$number)
+    
+    df <- rbind(df, data.frame( Weight = obs_w$weight, Catch_w = obs_w$number, Gear = gp$gear[i], Type = "Observed"))
+  }
+  
+  pl <- ggplot( df, aes(x = Weight, y = Catch_w, color = Type, fill = Type)) + facet_wrap(~Gear) +
+    geom_bar(data = subset(df, Type != 'Estimated'), stat = "identity", position = "dodge", alpha = 0.6) + 
+    geom_line(data = subset(df, Type == 'Estimated'), linewidth = 1) + theme_bw() + scale_x_log10(limits = c(1,max(w))) + 
+    labs( x = "Weight [g]", y = "Normalised number density [1/cm]", color = NULL, fill = NULL)
+  
+  print(pl)
+  
+  if(return_df) return(df)
+  
+}
+

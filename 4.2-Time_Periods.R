@@ -49,6 +49,8 @@ for( i in c(5)){
   gear_params( tp_mods[[ny]])$yield_observed <- corLFD_sum[[ny]]$catch   # == Catch$catch; != LFDs$catch
   
   tp_mods[[ny]] <- MIZER( model =  tp_mods[[ny]], catch = corLFD_list[[ny]])
+  tp_mods[[ny]] <- MIZER( model =  tp_mods[[ny]], catch = corLFD_list[[ny]])
+  tp_mods[[ny]] <- MIZER( model =  tp_mods[[ny]], catch = corLFD_list[[ny]])
   
   plot_lfd_gear( tp_mods[[ny]], corLFD_list[[ny]])
   
@@ -76,6 +78,7 @@ interaction_matrix( cannibal2)[] <- pcann2
 ext_mort( cannibal2) <- ext_mort( cannibal2) - getPredMort( cannibal2)
 
 cannibal_hake2 <- MIZER( model = cannibal2, catch = lfd2)
+cannibal_hake2 <- MIZER( model = cannibal_hake2, catch = lfd2)
 
 
 # Comparison -----------------
@@ -111,14 +114,21 @@ plot_lfd_gear( cannibal_hake2, lfd2)
 dir_name2 <- paste0( getwd(), '/plots/cannibalism/', vy2[1], '-', vy2[length(vy2)], '/')
 dir.create( path = dir_name2, showWarnings = TRUE, recursive = TRUE)
 
-pspectra2 <- plotSpectra2(hake_mizer2, name1 = "Base Model", cannibal_hake2, name2 = "With cannibalism",
+pspectra2 <- plotSpectra2(hake_mizer2, name1 = "No cannibalism", cannibal_hake2, name2 = "With cannibalism",
                          power = 2, resource = FALSE, wlim = c(10, NA)) + theme_bw()
 
 pspectra2
 ggsave( paste0(dir_name2,'spectra.jpg'), width = 9, height = 7)
+ggsave( paste0(dir_name2,'spectra_poster.jpg'), width = 5, height = 3)
+
+plotSpectra2( hake_mizer2, name1 = "No cannibalism", cannibal_hake2, name2 = "With cannibalism",
+             power = 2, resource = FALSE, wlim = c(10, NA)) + 
+  scale_y_log10("Biomass density [g]", limits = c( 1000, 10000000000)) + theme_bw()
+
+ggsave( paste0(dir_name2,'spectra_poster2.jpg'), width = 5, height = 3)
 
 
-p3$Model = 'Base Model'
+p3$Model = 'No cannibalism'
 p4$Model = 'With Cannibalism'
 
 ppt2 <- rbind( p3, p4)
@@ -132,9 +142,10 @@ pdeath2 <- ggplot(ppt2, aes(x = w, y = value, fill = Cause)) +
 
 pdeath2
 ggsave( paste0(dir_name2,'death.jpg'), width = 9, height = 7)
+ggsave( paste0(dir_name2,'death_poster.jpg'), width = 5, height = 3)
 
 
-l3$Model <- 'Base Model'
+l3$Model <- 'No cannibalism'
 l4$Model <- 'With Cannibalism'
 
 ldf2 <- rbind( l3, subset(l4, Type == 'Estimated'))
@@ -143,11 +154,12 @@ ldfp2 <- ggplot(ldf2, aes(x = Length, y = Density)) +
   geom_bar(data = subset(ldf2, Type != 'Estimated'), aes( fill = Type), stat = "identity", position = "dodge", alpha = 0.6) +
   geom_line(data = subset(ldf2, Type == 'Estimated'), aes( color = Model), linewidth = 1) +
   scale_fill_manual(values = c("Observed" = "yellowgreen")) +
-  scale_color_manual(values = c( "Base Model" = "#E41A1C", "With Cannibalism" = "#377EB8")) +
+  scale_color_manual(values = c( "No cannibalism" = "#E41A1C", "With Cannibalism" = "#377EB8")) +
   theme_bw() + labs( x = "Size [cm]", y = "Normalised number density [1/cm]", fill = NULL, color = NULL)
 
 ldfp2
 ggsave( paste0(dir_name2,'ldf.jpg'), width = 9, height = 7)
+ggsave( paste0(dir_name2,'ldf_poster.jpg'), width = 5, height = 3)
 
 
 save.image( './output/tp_hake.RData')

@@ -57,6 +57,7 @@ plotYieldVsF( cannibal, species="Hake",F_max=15)
 ## Fit ------------
 
 cannibal_hake <- MIZER( model = cannibal, catch = corLFD)
+cannibal_hake <- MIZER( model = cannibal_hake, catch = corLFD)
 # cannibal_hake2 <- MIZER( model = cannibal2, catch = corLFD)
 
 
@@ -119,17 +120,24 @@ dev.off()
 dir_name <- paste0( getwd(), '/plots/cannibalism/', aver_y[1], '-', aver_y[length(aver_y)], '/')
 dir.create( path = dir_name, showWarnings = TRUE, recursive = TRUE)
 
-pspectra <- plotSpectra2(hake_mizer, name1 = "Base Model", cannibal_hake, name2 = "With cannibalism",
+pspectra <- plotSpectra2(hake_mizer, name1 = "No cannibalism", cannibal_hake, name2 = "With cannibalism",
   power = 2, resource = FALSE, wlim = c(10, NA)) + theme_bw()
 
 pspectra
 ggsave( paste0(dir_name,'spectra.jpg'), width = 9, height = 7)
+ggsave( paste0(dir_name,'spectra_poster.jpg'), width = 5, height = 3)
+
+plotSpectra2(hake_mizer, name1 = "No cannibalism", cannibal_hake, name2 = "With cannibalism",
+             power = 2, resource = FALSE, wlim = c(10, NA)) + 
+  scale_y_log10("Biomass density [g]", limits = c( 1000, 10000000000)) + theme_bw()
+
+ggsave( paste0(dir_name,'spectra_poster2.jpg'), width = 5, height = 3)
 
 p1 <- plotDeath( hake_mizer, return_data = T)
 p2 <- plotDeath( cannibal_hake, return_data = T)
 
-p1$Model = 'Base Model'
-p2$Model = 'With Cannibalism'
+p1$Model = 'No cannibalism'
+p2$Model = 'With cannibalism'
 
 ppt <- rbind( p1, p2)
 ppt <- ppt %>% mutate(Cause = factor( Cause, levels = c("External", "Fishing", "Hake"), labels = c("Natural", "Fishing", "Cannibalism")))
@@ -142,13 +150,14 @@ pdeath <- ggplot(ppt, aes(x = w, y = value, fill = Cause)) +
 
 pdeath
 ggsave( paste0(dir_name,'death.jpg'), width = 9, height = 7)
+ggsave( paste0(dir_name,'death_poster.jpg'), width = 5, height = 3)
 
 
 l1 <- plot_lfd( hake_mizer, corLFD, return_df = T)
 l2 <- plot_lfd( cannibal_hake, corLFD, return_df = T)
 
-l1$Model <- 'Base Model'
-l2$Model <- 'With Cannibalism'
+l1$Model <- 'No cannibalism'
+l2$Model <- 'With cannibalism'
 
 ldf1 <- rbind( l1, subset(l2, Type == 'Estimated'))
 
@@ -156,10 +165,12 @@ ldfp1 <- ggplot(ldf1, aes(x = Length, y = Density)) +
   geom_bar(data = subset(ldf1, Type != 'Estimated'), aes( fill = Type), stat = "identity", position = "dodge", alpha = 0.6) +
   geom_line(data = subset(ldf1, Type == 'Estimated'), aes( color = Model), linewidth = 1) +
   scale_fill_manual(values = c("Observed" = "yellowgreen")) +
-  scale_color_manual(values = c( "Base Model" = "#E41A1C", "With Cannibalism" = "#377EB8")) +
+  scale_color_manual(values = c( "No cannibalism" = "#E41A1C", "With cannibalism" = "#377EB8")) +
   theme_bw() + labs( x = "Size [cm]", y = "Normalised number density [1/cm]", fill = NULL, color = NULL)
 
 ldfp1
 ggsave( paste0(dir_name,'ldf.jpg'), width = 9, height = 7)
+ggsave( paste0(dir_name,'ldf_poster.jpg'), width = 5, height = 3)
 
 save.image( './output/cannibal_hake.RData')
+save( hake_mizer, cannibal_hake, pcann, file= './fit.RData')

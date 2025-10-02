@@ -60,6 +60,8 @@ gear_names <- Catch$fleet
 
 ### Double sigmoid selectivity initial parameters
 
+ng <- length( gear_names)
+
 gear_params( hake_model) <- data.frame(
   gear = gear_names, species = "Hake", catchability = 1,
   sel_func = "double_sigmoid_length",
@@ -67,6 +69,7 @@ gear_params( hake_model) <- data.frame(
   l25 = c(       23.8, 28.5, 27.4, 13.0, 26.6, 28.1, 47.5, 51.3, 13.5),
   l50_right = c( 38.3, 33.6, 42.0, 20.6, 33.1, 35.6, 58.0, 54.4, 27.3),
   l25_right = c( 43.3, 45.0, 47.8, 27.0, 38.9, 45.9, 67.9, 60.8, 28.4))
+
 
 ### Catch by gear
 
@@ -78,7 +81,7 @@ sum(gear_params( hake_model)$yield_observed/1e6)
 
 ### Initial effort
 
-initial_effort( hake_model) <- .25
+initial_effort( hake_model) <- 1
 
 hake_model <- matchYield( hake_model)
 hake_model <- steady( hake_model)
@@ -90,79 +93,55 @@ hake_model <- steady( hake_model)
 # TMB::compile("./TMB/fit.cpp", flags = "-Og -g", clean = TRUE, verbose = TRUE)
 source( './scripts/MIZER.R')
 
-# nofixed <- c('h','n','ks','p','k','f0','alpha')
-nofixed <- c('h','ks','p','k','f0','alpha','n')
+# nofixed <- c( 'a', 'b','beta', 'sigma', 'inter_HR', 'inter_HH', 'gamma', 'q', 'h', 'n', 
+#               'ks', 'p', 'k', 'alpha', 'U', 'w_mat', 'w_min', 'w_max', 'M', 'd')
 
-# hake_model_fitted <- MIZER( model = hake_model, catch = corLFD, nofixed = nofixed)
 hake_model_fitted <- MIZER( model = hake_model, catch = corLFD)
+
+hake_model_fitted_nf <- MIZER( model = hake_model, catch = corLFD, 
+  fixed_sel = F, nofixed = c('h'))
+
+hake_model_fitted_nf2 <- MIZER( model = hake_model_fitted, catch = corLFD, 
+  fixed_sel = T, nofixed = c('h'))
+
+hake_model_fitted_nf3 <- MIZER( model = hake_model_fitted, catch = corLFD, 
+  fixed_sel = T, nofixed = c( 'gamma','q','h','n','ks','p','k','alpha','U','M','d'))
+
+hake_model_fitted_nf4 <- MIZER( model = hake_model_fitted, catch = corLFD, 
+  fixed_sel = T, nofixed = c( 'gamma','q','h','n','ks','p','k','alpha','U','M','d','kappa','lambda'))
+
+hake_model_fitted@species_params$h
+hake_model_fitted_nf@species_params$h
+hake_model_fitted_nf2@species_params$h
+hake_model_fitted_nf3@species_params$h
+hake_model_fitted_nf4@species_params$h
 
 
 ## Check ---------------------------------------
 
-plot_lfd( hake_model_fitted, corLFD)
-plot_lfd_gear( hake_model_fitted, corLFD)
-
-getYield( hake_model_fitted)
-sum( hake_model_fitted@gear_params$yield_observed)
 getYield( hake_model_fitted)/sum( hake_model_fitted@gear_params$yield_observed)
+getYield( hake_model_fitted_nf)/sum( hake_model_fitted@gear_params$yield_observed)
+getYield( hake_model_fitted_nf2)/sum( hake_model_fitted@gear_params$yield_observed)
+getYield( hake_model_fitted_nf3)/sum( hake_model_fitted@gear_params$yield_observed)
+getYield( hake_model_fitted_nf4)/sum( hake_model_fitted@gear_params$yield_observed)
 
-getBiomass( hake_model_fitted)
-hake_model_fitted@species_params$biomass_observed
-getBiomass( hake_model_fitted)/hake_model_fitted@species_params$biomass_observed
+nofixed = c( 'gamma','q','h','n','ks','p','k','alpha','U','M','d')
 
-# model_vector <- as.numeric(species_params(hake_model_fitted)[nofixed])
-# pre_vector <- as.numeric(species_params(hake_model)[nofixed])
-# 
-# biopars <- rbind( model_vector, pre_vector)
-# colnames(biopars) <- nofixed
-# biopars
-# 
-# hake_model_fitted@gear_params
-# 
-# plotSpectra( hake_model_fitted, power = 2) + theme_bw() 
-# 
-# 
-# ### HERE!!!! ---------------
-# 
-# ener <- getEnergy( hake_model_fitted, return_df = TRUE)
-# getEnergy( hake_model_fitted, log = FALSE)
-# 
-# sp <- species_params( hake_model_fitted)
-# wt <- w( hake_model_fitted)
-# 
-# 
-# ## No update??
-# 
-# getMetabolicRate(hake_model_fitted)
-# getMetabolicRate(hake_model_fitted)/(hake_model@species_params$ks*(wt^hake_model@species_params$p))
-# getMetabolicRate(hake_model_fitted)/(sp$ks*(wt^sp$p))
-# getMetabolicRate(hake_model_fitted)/getMetabolicRate(hake_model)
-# getMetabolicRate(bio_pars)/getMetabolicRate(hake_model)
-# 
-# 
-# 
-# ## Then: old ---------------
-# 
-# getEnergy( hake_model)
-# getEnergy( hake_model, log = TRUE)
-# 
-# sp <- species_params( hake_model)
-# wt <- w( hake_model)
-# 
-# emetab <- sp$ks * wt^sp$p
-# eactiv <- sp$k * wt
-# etotal <- sp$alpha*sp$f0*(sp$h*wt^sp$n)
-# ereproandgrowth <- etotal - emetab - eactiv
-# repp <- (wt/sp$w_max)^(1-sp$n)
-# phi <-  (wt/sp$w_max)^(1-sp$n) * (1/(1+(wt/sp$w_mat)^(-sp$U)))
-# egrowth <- ereproandgrowth * (1-phi)
-# erepro <- ereproandgrowth * (phi)
-# 
-# getReproductionProportion(hake_model)/repp
-# getEGrowth(hake_model)/egrowth
-# getMetabolicRate(hake_model)/emetab
-# getEReproAndGrowth(hake_model)/ereproandgrowth
-# getERepro(hake_model)/erepro
+model_vector1 <- as.numeric(species_params(hake_model_fitted)[nofixed])
+model_vector2 <- as.numeric(species_params(hake_model_fitted_nf2)[nofixed])
+model_vector3 <- as.numeric(species_params(hake_model_fitted_nf3)[nofixed])
+
+biopars <- rbind( model_vector1, model_vector2, model_vector3)
+colnames(biopars) <- nofixed
+biopars
+
+res_pars <- c('kappa','lambda')
+model_vector1 <- as.numeric(resource_params(hake_model_fitted)[res_pars])
+model_vector2 <- as.numeric(resource_params(hake_model_fitted_nf4)[res_pars])
+
+respars <- rbind( model_vector1, model_vector2)
+colnames(respars) <- res_pars
+respars
 
 
 # Background ---------------
@@ -192,3 +171,5 @@ plotSpectra( hake_mizer, power = 2) + theme_bw()
 
 save.image( './output/hake_model.RData')
 
+modelo <- hake_mizer
+save(modelo, file = "./fit.RData")
