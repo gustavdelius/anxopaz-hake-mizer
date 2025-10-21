@@ -1,7 +1,8 @@
 
 MIZER <- function( model, catch, w_from_catch = TRUE, compiler = FALSE,
                    nofixed = NULL, fixed_sel = FALSE, low_bounds = NULL, upp_bounds = NULL,
-                   yield_lambda = 1e7, biomass_lambda = 1e7) {
+                   yield_lambda = 1e7, biomass_lambda = 1e7, 
+                   plot = F, plot_dir = getwd()) {
   
   # Prefit
   
@@ -124,7 +125,7 @@ MIZER <- function( model, catch, w_from_catch = TRUE, compiler = FALSE,
   
   # Fit
   
-  # TMB::compile("./TMB/fit.cpp", flags = "-Og -g", clean = TRUE, verbose = TRUE)
+  if(compiler==T) TMB::compile("./TMB/fit.cpp", flags = "-Og -g", clean = TRUE, verbose = TRUE)
   dyn.load( dynlib("./TMB/fit"))
   
   obj <- MakeADFun( data = data_list, parameters = pars, DLL = "fit")
@@ -186,7 +187,15 @@ MIZER <- function( model, catch, w_from_catch = TRUE, compiler = FALSE,
     } else { model@initial_n[1,] <- obj$report(optim_result$par)$final_B / (w * c(diff(w),1))}
 
   plot_lfd( model, catch)
+  if(plot == T){
+    dir.create( path = plot_dir, showWarnings = TRUE, recursive = TRUE)
+    ggsave( paste0( plot_dir, 'LFD.jpg'), width = 9, height = 7)
+  } 
+  
   plot_lfd_gear( model, catch)
+  if(plot == T){
+    ggsave( paste0( plot_dir, 'LFD_gear.jpg'), width = 9, height = 7)
+  }
   
   return(model)
   

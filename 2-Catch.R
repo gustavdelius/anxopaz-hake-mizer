@@ -121,11 +121,17 @@ for( i in 1:length(years)){
   ## Plots ----------
   
   chn <- paste0( iy[1], '-',iy[length(iy)])
+
+  # pdf(paste0( plotdir, "Catch-LDs_",chn,".pdf"), width = 10, height = 6, onefile = TRUE)
+  # print(catch_plot[[cy]])
+  # print(LFD_plot[[cy]])
+  # dev.off()
   
-  pdf(paste0( plotdir, "Catch-LDs_",chn,".pdf"), width = 10, height = 6, onefile = TRUE)
   print(catch_plot[[cy]])
+  ggsave(paste0( plotdir, "Catch_",chn,".jpg"), width = 9, height = 7)
+  
   print(LFD_plot[[cy]])
-  dev.off()
+  ggsave(paste0( plotdir, "LDs_",chn,".jpg"), width = 9, height = 7)
   
   
   ## Check C vs LFD -----------------
@@ -186,9 +192,12 @@ for( i in 1:length(years)){
     summarise(catch = sum(weight * number, na.rm = TRUE), .groups = "drop") %>% 
     filter( fleet %in% surv)
   
-  pdf(paste0( plotdir, "Surv-Catch-LDs_",chn,".pdf"), width = 10, height = 6, onefile = TRUE)
+  # pdf(paste0( plotdir, "Surv-Catch-LDs_",chn,".pdf"), width = 10, height = 6, onefile = TRUE)
+  # print(LFD_plot2[[cy]])
+  # dev.off()
+  
   print(LFD_plot2[[cy]])
-  dev.off()
+  ggsave(paste0( plotdir, "Surv-Catch-LDs_",chn,".jpg"), width = 9, height = 7)
   
   cat('\n \n')
   
