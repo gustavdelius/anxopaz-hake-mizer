@@ -128,7 +128,7 @@ MIZER <- function( model, catch, w_from_catch = TRUE, compiler = FALSE,
   if (compiler == TRUE) {
     # Need to remove previous compilation artifacts 
     # (`clean = TRUE` does not always find the files in their subdirectory)
-    file.remove("./TMB/fit.o", "./TMB/fit.so")
+    suppressWarnings(file.remove("./TMB/fit.o", "./TMB/fit.so"))
     TMB::compile("./TMB/fit.cpp", flags = "-Og -g", clean = TRUE, verbose = TRUE)
   }
   dyn.load( dynlib("./TMB/fit"))

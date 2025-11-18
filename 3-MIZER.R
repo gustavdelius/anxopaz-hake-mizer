@@ -107,7 +107,7 @@ source( './scripts/MIZER.R')
 # nofixed <- c( 'a', 'b','beta', 'sigma', 'inter_HR', 'inter_HH', 'gamma', 'q', 'h', 'n', 
 #               'ks', 'p', 'k', 'alpha', 'U', 'w_mat', 'w_min', 'w_max', 'M', 'd')
 
-compiler <- file.exists( dynlib("./TMB/fit"))
+compiler <- !file.exists( dynlib("./TMB/fit"))
 only_sel_mod <- MIZER( model = hake_model, catch = corLFD,
   plot = T, plot_dir = paste0( pd_name, 'only_sel/'), compiler = compiler)
 
