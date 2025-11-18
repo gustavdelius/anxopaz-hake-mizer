@@ -6,7 +6,7 @@
 
 rm(list=ls())
 
-library(dplyr)
+library(dplyr) 
 library(tidyr)
 library(ggplot2)
 library(gridExtra)
@@ -31,22 +31,22 @@ load( './input/Bio_Pars.RData')     # './1-Bio_Pars.R' with Biological Parameter
 load( './input/Catch.RData')   # './2-Catch.R' with Catch and LFD data
 
 
-# SSB ----------------
+# SSB / Bio ----------------
 
 load( './input/Hake_SS_Data.RData')   # './scripts/WGBIE24.R' WGBIE assessment results
 
-aver_y
+quantity <- 'biomass' # 'SSB'
 
-ss_biomass <- assessment$SSB[assessment$Year %in% aver_y]*1e6  # SS biomass (tonnes to grams)
+ss_biomass <- assessment[,quantity][assessment$Year %in% aver_y]*1e6  # SS biomass (tonnes to grams)
 
-species_params(bio_pars)$biomass_observed <- sum(ss_biomass)/length(aver_y)
-species_params(bio_pars)$biomass_cutoff <- lwf(4,a,b)   # SS smallest size is 4 cm
+obs_q <- sum(ss_biomass)/length(aver_y); obs_q/1e6 
+b_min <- lwf(4,a,b); b_min   # SS smallest size is 4 cm
 
-species_params(bio_pars)$biomass_observed/1e6
-species_params(bio_pars)$biomass_cutoff
+species_params(bio_pars)$biomass_observed <- obs_q
+species_params(bio_pars)$biomass_cutoff <- b_min
 
 bio_pars <- setBevertonHolt( bio_pars,        # Rdd = Rdi * (Rmax/(Rdi+Rmax))
-                reproduction_level = 0.001)   # rep_level = Rdd/Rmax (density dependance degree)
+                             reproduction_level = 0.001)   # rep_level = Rdd/Rmax (density dependance degree)
 
 
 
@@ -98,108 +98,152 @@ hake_model <- steady( hake_model)
 
 # Fit ----------------------
 
-pd_name <- paste0( getwd(), '/output/plots/base/')
+pd_name <- paste0( getwd(), '/output/OMs/')
 dir.create( path = pd_name, showWarnings = TRUE, recursive = TRUE)
 
 # TMB::compile("./TMB/fit.cpp", flags = "-Og -g", clean = TRUE, verbose = TRUE)
 source( './scripts/MIZER.R')
 
-# nofixed <- c( 'a', 'b','beta', 'sigma', 'inter_HR', 'inter_HH', 'gamma', 'q', 'h', 'n', 
+# nofixed <- c( 'a', 'b','beta', 'sigma', 'inter_HR', 'inter_HH', 'gamma', 'q', 'h', 'n',
 #               'ks', 'p', 'k', 'alpha', 'U', 'w_mat', 'w_min', 'w_max', 'M', 'd')
 
-compiler <- !file.exists( dynlib("./TMB/fit"))
-only_sel_mod <- MIZER( model = hake_model, catch = corLFD,
-  plot = T, plot_dir = paste0( pd_name, 'only_sel/'), compiler = compiler)
 
-sel_and_gamma_mod <- MIZER( model = hake_model, catch = corLFD,
-  fixed_sel = F, nofixed = c('gamma'),
-  plot = T, plot_dir = paste0( pd_name, 'sel_and_gamma/'))
+## OMs ---------------------------------
 
-only_gamma_mod <- MIZER( model = only_sel_mod, catch = corLFD,
-  fixed_sel = T, nofixed = c('gamma'),
-  plot = T, plot_dir = paste0( pd_name, 'only_gamma/'))
+compiler <- !file.exists( "./TMB/fit.o")
 
-only_others_mod <- MIZER( model = only_sel_mod, catch = corLFD,
-  fixed_sel = T, nofixed = c( 'gamma','q','n','ks','p','k','alpha'),
-  plot = T, plot_dir = paste0( pd_name, 'only_others/'))
+only_sel_mod <- MIZER( model = hake_model, catch = corLFD, compiler = compiler,
+                       plot = T, plot_dir = paste0( pd_name, 'only_sel/'))
 
-only_others_resources_mod <- MIZER( model = only_sel_mod, catch = corLFD,
-  fixed_sel = T, nofixed = c( 'gamma','q','n','ks','p','k','alpha','kappa','lambda'),
-  plot = T, plot_dir = paste0( pd_name, 'only_others_resources/'))
+sel_and_gamma_mod <- MIZER( model = hake_model, catch = corLFD, compiler = compiler,
+                            fixed_sel = F, nofixed = c('gamma'),
+                            plot = T, plot_dir = paste0( pd_name, 'sel_and_gamma/'))
 
-only_resources_mod <- MIZER( model = only_sel_mod, catch = corLFD,
-  fixed_sel = T, nofixed = c( 'kappa','lambda'),
-  plot = T, plot_dir = paste0( pd_name, 'only_resources/'))
+only_gamma_mod <- MIZER( model = only_sel_mod, catch = corLFD, compiler = compiler,
+                         fixed_sel = T, nofixed = c('gamma'),
+                         plot = T, plot_dir = paste0( pd_name, 'only_gamma/'))
 
-all_fitted_mod <- MIZER( model = hake_model, catch = corLFD,
-  fixed_sel = F, nofixed = c( 'gamma','q','n','ks','p','k','alpha','kappa','lambda'),
-  plot = T, plot_dir = paste0( pd_name, 'all_fitted/'))
+only_others_mod <- MIZER( model = only_sel_mod, catch = corLFD, compiler = compiler,
+                          fixed_sel = T, nofixed = c( 'gamma','q','n','ks','p','k','alpha'),
+                          plot = T, plot_dir = paste0( pd_name, 'only_others/'))
 
-hake_model_fitted <- only_sel_mod
+only_others_resources_mod <- MIZER( model = only_sel_mod, catch = corLFD, compiler = compiler,
+                                    fixed_sel = T, nofixed = c( 'gamma','q','n','ks','p','k','alpha','kappa','lambda'),
+                                    plot = T, plot_dir = paste0( pd_name, 'only_others_resources/'))
+
+only_resources_mod <- MIZER( model = only_sel_mod, catch = corLFD, compiler = compiler,
+                             fixed_sel = T, nofixed = c( 'kappa','lambda'),
+                             plot = T, plot_dir = paste0( pd_name, 'only_resources/'))
+
+all_fitted_mod <- MIZER( model = hake_model, catch = corLFD, compiler = compiler,
+                         fixed_sel = F, nofixed = c( 'gamma','q','n','ks','p','k','alpha','kappa','lambda'),
+                         plot = T, plot_dir = paste0( pd_name, 'all_fitted/'))
 
 
-## Comparison --------------------
+### Comparison --------------------
 
-mod_list <- list( only_sel=only_sel_mod, sel_and_gamma=sel_and_gamma_mod, 
-  only_gamma=only_gamma_mod, only_others=only_others_mod, only_others_resources=only_others_resources_mod,
-  only_resources=only_resources_mod, all_fitted=all_fitted_mod)
+mod_list <- list( only_sel = only_sel_mod, sel_and_gamma = sel_and_gamma_mod,
+                  only_gamma = only_gamma_mod, only_others = only_others_mod, 
+                  only_others_resources = only_others_resources_mod,
+                  only_resources = only_resources_mod, all_fitted = all_fitted_mod)
 
-nofixed <- c( 'gamma','q','n','ks','p','k','alpha')
-res_pars <- c('kappa','lambda')
+nofixed <- c( 'gamma', 'q', 'n', 'ks', 'p', 'k', 'alpha')
+res_pars <- c( 'kappa', 'lambda')
 all_pars <- c( 'inc_SSB', 'inc_Y', nofixed, res_pars)
 
 pars_table <- matrix( NA, nrow = length(mod_list), ncol = length(all_pars), 
-  dimnames = list( names(mod_list), all_pars))
-
-for(i in names(mod_list)){
-  pars_table[i,] <- c( 
-    signif( getBiomass( mod_list[[i]])/hake_model_fitted@species_params$biomass_observed,3),
-    signif( (getYield( mod_list[[i]])/sum( hake_model_fitted@gear_params$yield_observed)),3),
-    signif( as.numeric(species_params(mod_list[[i]])[nofixed]),3),
-    signif( as.numeric(resource_params(mod_list[[i]])[res_pars]),3))
-}
-
-pars_table
+                      dimnames = list( names(mod_list), all_pars))
 
 spectradf <- NULL
 
 for(i in names(mod_list)){
-  idf <- plotSpectra( mod_list[[i]], power = 2)
-  idf <- idf$data[which(idf$data$Species=='Hake'),c('w','value')]; idf$model <- i
+  pars_table[i,] <- parsf( mod_list[[i]])
+  idf <- spf(mod_list[[i]], name = i)
   spectradf <- rbind( spectradf, idf)}
 
-ggplot( spectradf, aes( x = w, y = value, color = model)) + 
+pars_table
+
+ggplot( spectradf, aes( x = w, y = value, color = Model)) + 
   geom_line( linewidth = .8) + scale_x_log10() + scale_y_log10() + theme_bw() +
-  labs ( x = 'Weigth [g]', y = 'Biomass density [g]', color = 'Model')
+  labs ( x = 'Weigth [g]', y = 'Biomass density', color = 'Model')
 
 ggsave( paste0( pd_name, 'spectra_comparison.jpg'), width = 12, height = 7)
 
-ggplot( spectradf, aes( x = w, y = value, color = model)) + 
-  geom_line( linewidth = .8) + scale_x_log10( limits = c( 10, NA)) + 
-  scale_y_log10( limits = c( 100000000, NA)) + theme_bw() +
-  labs ( x = 'Weigth [g]', y = 'Biomass density [g]', color = 'Model')
+ggplot( spectradf %>% filter(w>10), aes( x = w, y = value, color = Model)) + 
+  geom_line( linewidth = .8) + scale_x_log10() + scale_y_log10() + theme_bw() +
+  labs ( x = 'Weigth [g]', y = 'Biomass density', color = 'Model')
 
 ggsave( paste0( pd_name, 'spectra_comparisonx10.jpg'), width = 12, height = 7)
 
+ggplot( spectradf, aes( x = w, y = value2, color = Model)) + 
+  geom_line( linewidth = .8) + scale_x_log10() + scale_y_log10() + theme_bw() +
+  labs ( x = 'Weigth [g]', y = 'Biomass density [g]', color = 'Model')
 
-  
+ggsave( paste0( pd_name, 'spectra_comparison2.jpg'), width = 12, height = 7)
+
+ggplot( spectradf %>% filter(w>10), aes( x = w, y = value2, color = Model)) + 
+  geom_line( linewidth = .8) + scale_x_log10() + scale_y_log10() + theme_bw() +
+  labs ( x = 'Weigth [g]', y = 'Biomass density [g]', color = 'Model')
+
+ggsave( paste0( pd_name, 'spectra_comparison2x10.jpg'), width = 12, height = 7)
+
+
+
+# OM selection ------------
+
+hake_model_fitted <- only_sel_mod  
+
+
 ## Background ---------------
 
 plotSpectra( hake_model_fitted, power = 2) + theme_bw() 
 ggsave( paste0( pd_name, 'base_rr.jpg'), width = 12, height = 7)
 
-hake_mizer <- scaleDownBackground( hake_model_fitted, 2e-7)
+hake_mizer <- scaleDownBackground( hake_model_fitted, 2e-8)
 
-plotSpectra( hake_mizer, power = 2) + theme_bw() 
+plotSpectra( hake_mizer) + theme_bw() 
 ggsave( paste0( pd_name, 'base_pluskappa.jpg'), width = 12, height = 7)
 
-pars_table <- rbind( pars_table, rescaled_res = c( 
-  signif( getBiomass( hake_mizer)/hake_model_fitted@species_params$biomass_observed,3),
-  signif( getYield( hake_mizer)/sum( hake_model_fitted@gear_params$yield_observed),3),
-  signif( as.numeric(species_params(hake_mizer)[nofixed]),3),
-  signif( as.numeric(resource_params(hake_mizer)[res_pars]),3)))
+plotSpectra( hake_mizer, power = 2) + theme_bw() 
+ggsave( paste0( pd_name, 'base_pluskappa2.jpg'), width = 12, height = 7)
 
-pars_table
+rescaled <- parsf( hake_mizer)
+pars_table <- rbind( pars_table, rescaled = rescaled); pars_table
+
+
+## Background rescaled fit ---------------------
+
+hake_mizer2 <- MIZER( model = hake_mizer, catch = corLFD, compiler = compiler,
+                      plot = T, plot_dir = paste0( pd_name, 'after_res/'))
+
+hake_mizer3 <- MIZER( model = hake_mizer2, catch = corLFD, compiler = compiler,
+                      nofixed = c('gamma', 'p'),
+                      plot = T, plot_dir = paste0( pd_name, 'after_res_gamma/'))
+
+hake_mizer4 <- hake_model_fitted
+hake_mizer4@resource_params$kappa <- hake_mizer@resource_params$kappa
+
+hake_mizer4 <- MIZER( model = hake_mizer4, catch = corLFD, compiler = compiler,
+                      nofixed = c('gamma'),
+                      plot = T, plot_dir = paste0( pd_name, 'after_res_gamma2/'))
+
+after_rescaled <- parsf( hake_mizer2)
+pars_table <- rbind( pars_table, after_rescaled = after_rescaled); pars_table
+
+after_rescaled_gamma <- parsf( hake_mizer3)
+pars_table <- rbind( pars_table, after_rescaled_gamma = after_rescaled_gamma); pars_table
+
+after_kappa_gamma <- parsf( hake_mizer4)
+pars_table <- rbind( pars_table, after_kappa_gamma = after_kappa_gamma); pars_table
+
+hake_mizer5 <- hake_model
+hake_mizer5@resource_params$kappa <- hake_mizer@resource_params$kappa
+
+hake_mizer5 <- MIZER( model = hake_mizer5, catch = corLFD, nofixed = c('gamma'), compiler = compiler,
+                      plot = T, plot_dir = paste0( pd_name, 'after_res_gamma3/'))
+
+after_kappa_gamma2 <- parsf( hake_mizer5)
+pars_table <- rbind( pars_table, after_kappa_gamma2 = after_kappa_gamma2); pars_table
 
 
 # # Old MIZER fit
@@ -216,12 +260,12 @@ pars_table
 # # hake_model <- scaleDownBackground( hake_model, 1/8000000)
 
 
-# Save ----------------------
+## Save base fit----------------------
 
 save.image( './output/hake_model.RData')
 
 modelo <- hake_mizer
-save(modelo, file = "./fit.RData")
+save( modelo, file = "./fit.RData")
 
 
 
@@ -229,22 +273,16 @@ save(modelo, file = "./fit.RData")
 
 load( './data/Diet.RData')
 
-cannibal <- hake_mizer
-# cannibal2 <- hake_model_fitted
+cannibal <- cannibal2 <- hake_mizer
 
+pcann <- mean( cannibal_byyear$Percentage[ which(cannibal_byyear$Year %in% aver_y)]); pcann
 
-## Turn on cannibalism
-
-pcann <- mean( cannibal_byyear$Percentage[ which(cannibal_byyear$Year %in% aver_y)])
-
-interaction_matrix( cannibal)[] <- pcann
-# interaction_matrix( cannibal2)[] <- pcann
+interaction_matrix( cannibal)[] <- interaction_matrix( cannibal2)[] <- pcann
 
 ext_mort( cannibal) <- ext_mort( cannibal) - getPredMort( cannibal)
-# ext_mort( cannibal2) <- ext_mort( cannibal2) - getPredMort( cannibal2)
 
-# p_test <- steadySingleSpecies( cannibal)
-# all.equal( initialN(cannibal), initialN(p_test), tolerance = 1e-5)
+p_test <- steadySingleSpecies( cannibal)
+all.equal( initialN(cannibal), initialN(p_test), tolerance = 1e-5)
 
 cdir <- paste0( getwd(), '/output/cannibal/')
 dir.create( path = cdir, showWarnings = TRUE, recursive = TRUE)
@@ -252,49 +290,56 @@ dir.create( path = cdir, showWarnings = TRUE, recursive = TRUE)
 
 ## Fit
 
-cannibal_hake <- MIZER( model = cannibal, catch = corLFD, plot = T, plot_dir = cdir)
-# cannibal_hake2 <- MIZER( model = cannibal2, catch = corLFD, plot = T, plot_dir = paste0(cdir,'/2'))
+cannibal_hake <- MIZER( model = cannibal, catch = corLFD, compiler = compiler, plot = T, plot_dir = cdir)
+
+compiler2 <- !file.exists( dynlib("./TMB/fit_cann"))
+
+cannibal_hake2 <- MIZER( model = cannibal, catch = corLFD, compiler = compiler2,
+                         plot = T, plot_dir = paste0( cdir, '2/'), cannibalism = 'diff')
 
 
 ## Add to Comparison
 
-pars_table <- rbind( pars_table, cannibal = c( 
-  signif( getBiomass( cannibal_hake)/hake_model_fitted@species_params$biomass_observed,3),
-  signif( getYield( cannibal_hake)/sum( hake_model_fitted@gear_params$yield_observed),3),
-  signif( as.numeric(species_params(cannibal_hake)[nofixed]),3),
-  signif( as.numeric(resource_params(cannibal_hake)[res_pars]),3)))
+base_model <- pars_table['rescaled',]
 
-pars_table
+cpars_table <- rbind( base_model = base_model, cannibal = parsf( cannibal_hake))
+cpars_table        # equal
 
-plotDiet( hake_mizer)
-plotDiet( cannibal_hake)
-# plotDiet( cannibal_hake2)
+plotDiet( hake_mizer) + scale_x_log10( limits = c( 10, NA))
+plotDiet( cannibal_hake) + scale_x_log10( limits = c( 10, NA))
+plotDiet( cannibal_hake2) + scale_x_log10( limits = c( 10, NA))
 
+bmsp <- spf( hake_mizer, name = 'Base Model')
+csp1 <- spf( cannibal, name = 'No Refit')
+csp2 <- spf( cannibal_hake, name = 'With Cannibalism')
+csp3 <- spf( cannibal_hake2, name = 'With Cannibalism (rare)')
 
-s1 <- plotSpectra2(hake_mizer, name1 = "Base Model", cannibal_hake, name2 = "With cannibalism",
-  power = 2, resource = FALSE)
+stot <- rbind( bmsp, csp1, csp2, csp3) %>% filter( w > 10)
 
-s2 <- plotSpectra2(cannibal, name1 = "No refit", hake_mizer, name2 = "Base Model",
-  power = 2, resource = FALSE)
-
-stot <- rbind( s1$data, s2$data[which(s2$data$Model=='No refit'),])
-
-ggplot( stot, aes( x = w, y = value, color = Model)) + 
-  geom_line( linewidth = .8) + scale_x_log10( limits = c( 10, NA)) + 
-  scale_y_log10( limits = c( 100000000, NA)) + theme_bw() +
-  labs ( x = 'Weigth [g]', y = 'Biomass density [g]', color = 'Model')
+ggplot( stot, aes( x = w, y = value, color = Model)) + theme_bw() +
+  geom_line( linewidth = .8) + scale_x_log10() + 
+  labs ( x = 'Weigth [g]', y = 'Biomass density', color = 'Model')
 
 ggsave( paste0( cdir, 'spectra_comparison.jpg'), width = 12, height = 7)
+
+ggplot( stot, aes( x = w, y = value2, color = Model)) + theme_bw() +
+  geom_line( linewidth = .8) + scale_x_log10() + 
+  labs ( x = 'Weigth [g]', y = 'Biomass density [g]', color = 'Model')
+
+ggsave( paste0( cdir, 'spectra_comparison2.jpg'), width = 12, height = 7)
 
 
 p1 <- plotDeath( hake_mizer, return_data = T)
 p2 <- plotDeath( cannibal_hake, return_data = T)
+p3 <- plotDeath( cannibal_hake2, return_data = T)
 
-p1$Model = 'No cannibalism'
-p2$Model = 'With cannibalism'
+p1$Model = 'Base Model'
+p2$Model = 'With Cannibalism'
+p3$Model = 'With Cannibalism (rare)'
 
-ppt <- rbind( p1, p2)
+ppt <- rbind( p1, p2, p3)
 ppt <- ppt %>% mutate(Cause = factor( Cause, levels = c("External", "Fishing", "Hake"), labels = c("Natural", "Fishing", "Cannibalism")))
+ppt <- subset( ppt, w > 1)
 
 pdeath <- ggplot(ppt, aes(x = w, y = value, fill = Cause)) +
   geom_area(position = "stack") + scale_x_log10() +   theme_bw() +
@@ -303,6 +348,7 @@ pdeath <- ggplot(ppt, aes(x = w, y = value, fill = Cause)) +
                      labels = c("Natural" = "Natural", "Fishing" = "Fishing", "Cannibalism" = "Cannibalism"))
 
 pdeath
+
 ggsave( paste0( cdir, 'death_comparison.jpg'), width = 12, height = 7)
 # ggsave( paste0(cdir,'death_poster.jpg'), width = 5, height = 3)
 
@@ -310,22 +356,74 @@ ggsave( paste0( cdir, 'death_comparison.jpg'), width = 12, height = 7)
 l1 <- plot_lfd( hake_mizer, corLFD, return_df = T)
 l2 <- plot_lfd( cannibal_hake, corLFD, return_df = T)
 
-l1$Model <- 'No cannibalism'
-l2$Model <- 'With cannibalism'
+l1$Model <- 'Base Model'
+l2$Model <- 'With Cannibalism'
 
 ldf1 <- rbind( l1, subset(l2, Type == 'Estimated'))
 
 ldfp1 <- ggplot(ldf1, aes(x = Length, y = Density)) +
   geom_bar(data = subset(ldf1, Type != 'Estimated'), aes( fill = Type), stat = "identity", position = "dodge", alpha = 0.6) +
   geom_line(data = subset(ldf1, Type == 'Estimated'), aes( color = Model), linewidth = 1) +
-  scale_fill_manual(values = c("Observed" = "yellowgreen")) +
-  scale_color_manual(values = c( "No cannibalism" = "#E41A1C", "With cannibalism" = "#377EB8")) +
+  scale_fill_manual(values = c("Observed" = "#00BFC4")) +
+  scale_color_manual(values = c( "Base Model" = "#F8766D", "With Cannibalism" = "#7CAE00")) +
   theme_bw() + labs( x = "Size [cm]", y = "Normalised number density [1/cm]", fill = NULL, color = NULL)
 
 ldfp1
-ggsave( paste0( cdir,'ldf.jpg'), width = 9, height = 7)
-# ggsave( paste0( cdir,'ldf_poster.jpg'), width = 5, height = 3)
 
+ggsave( paste0( cdir,'ldf.jpg'), width = 9, height = 7)
+
+
+
+# Natural Mortality ----------------------------------
+
+tpnmdir <- paste0( getwd(), '/output/natural_mortality/')
+dir.create( path = tpnmdir, showWarnings = TRUE, recursive = TRUE)
+
+natmmod <- natmmod2 <- natmmod3 <- hake_mizer
+
+load( './data/Natural_Mortality.RData')   # './scripts/Natural_Mortality.R' results
+
+mu0_lm <- NatM_pars['lm','mu0']
+d_lm <- NatM_pars['lm','d']
+lm_mort <- mu0_lm*w(hake_mizer)^(d_lm)
+
+mu0_nls <- NatM_pars['nls','mu0']
+d_nls <- NatM_pars['nls','d']
+nls_mort <- mu0_nls*w(hake_mizer)^(d_nls)
+
+mu0_DB <- NatM_pars['ad_hoc','mu0']
+d_DB <- NatM_pars['ad_hoc','d']
+DB_mort <- mu0_DB*w(hake_mizer)^(d_DB)
+
+ext_mort( natmmod) <- array( lm_mort, dim=c(1,bins_no))
+ext_mort( natmmod2) <- array( DB_mort, dim=c(1,bins_no))
+ext_mort( natmmod3) <- array( nls_mort, dim=c(1,bins_no))
+
+species_params( natmmod)[c('d','M')] <- c( d_lm, mu0_lm)
+species_params( natmmod2)[c('d','M')] <- c( d_DB, mu0_DB)
+species_params( natmmod3)[c('d','M')] <- c( d_nls, mu0_nls)
+
+natmmod <- MIZER( model = natmmod, catch = corLFD, compiler = compiler)
+natmmod2 <- MIZER( model = natmmod2, catch = corLFD, compiler = compiler)
+natmmod3 <- MIZER( model = natmmod3, catch = corLFD, compiler = compiler)
+
+msp1 <- spf( natmmod, name = 'Linear Model')
+msp2 <- spf( natmmod2, name = 'ad-hoc Model')
+msp3 <- spf( natmmod3, name = 'NLS Model')
+
+stotnm <- rbind( msp1, msp2, msp3) %>% filter( w > 10)
+
+ggplot( stotnm, aes( x = w, y = value, color = Model)) + 
+  geom_line( linewidth = .8) + scale_x_log10( limits = c( 10, NA)) + theme_bw() +
+  labs ( x = 'Weigth [g]', y = 'Biomass density', color = 'Model')
+
+ggsave( paste0( tpnmdir,'spectra_comparison.jpg'), width = 9, height = 7)
+
+ggplot( stotnm, aes( x = w, y = value2, color = Model)) + 
+  geom_line( linewidth = .8) + scale_x_log10( limits = c( 10, NA)) + theme_bw() +
+  labs ( x = 'Weigth [g]', y = 'Biomass density [g]', color = 'Model')
+
+ggsave( paste0( tpnmdir,'spectra_comparison2.jpg'), width = 9, height = 7)
 
 
 # Time periods --------------------------------
@@ -337,7 +435,8 @@ dir.create( path = tpdir, showWarnings = TRUE, recursive = TRUE)
 
 tp_mods <- list()
 
-years
+years <- list( years[[2]], years[[3]], years[[4]])
+for(i in 1:length(years)) names(years)[[i]] <- paste0( years[[i]][1],' - ', years[[i]][5]) 
 
 for( i in 1:length(years)){
   
@@ -345,7 +444,7 @@ for( i in 1:length(years)){
   vy <- years[[i]]
   ychar <- paste0( vy[1],'-',vy[length(vy)])
   
-  ssbio_tp <- sum(assessment$SSB[assessment$Year %in% vy]*1e6)/length(vy)
+  ssbio_tp <- sum(assessment[,quantity][assessment$Year %in% vy]*1e6)/length(vy)
   
   itp_mod <- hake_mizer
   
@@ -357,118 +456,243 @@ for( i in 1:length(years)){
   
   gear_params( itp_mod)$yield_observed <- corLFD_sum[[i]]$catch
   
-  tp_mods[[ychar]] <- MIZER( model =  itp_mod, catch = corLFD_list[[i]],
-     plot = T, plot_dir = paste0(ychar,'/'))
+  tp_mods[[ychar]] <- MIZER( model =  itp_mod, catch = corLFD_list[[i]], compiler = compiler,
+                             plot = T, plot_dir = paste0(tpdir,ychar,'/'))
   
-  plotSpectra( tp_mods[[ychar]], power = 2) + theme_bw()
+  plotSpectra( tp_mods[[ychar]]) + theme_bw()
   ggsave(paste0(tpdir,ychar,'/spectra.jpg'), width = 9, height = 7) 
   
+  plotSpectra( tp_mods[[ychar]], power = 2) + theme_bw()
+  ggsave(paste0(tpdir,ychar,'/spectra2.jpg'), width = 9, height = 7) 
+  
 }
 
 
-spdf <- plotSpectra( tp_mods[[1]], power = 2)
-spdf <- subset( spdf$data, Legend == 'Resource')[,c(1,2)]
-spdf$Model <- 'Resource'
+tpdf <- NULL
+for(i in names(tp_mods)){ tpdf <- rbind( tpdf, spf( tp_mods[[i]], name = i))}
 
-for(i in names(tp_mods)){
-  ispdf <- plotSpectra( tp_mods[[i]], power = 2)
-  ispdf <- subset(ispdf$data, Legend != 'Resource')[,c(1,2)]  
-  ispdf$Model <- i
-  spdf <- rbind( spdf, ispdf)
-}
-
-ggplot( spdf, aes( x = w, y = value, color = Model)) + 
-  geom_line( linewidth = .8) + scale_x_log10( limits = c( 10, NA)) + 
-  scale_y_log10( limits = c( 100000000, NA)) + theme_bw() +
-  labs ( x = 'Weigth [g]', y = 'Biomass density [g]', color = 'Period')
-
-ggsave( paste0( tpdir, 'spectra_comparison_res.jpg'), width = 12, height = 7)
-
-spdf <- subset(spdf, Model!= 'Resource')
-
-ggplot( spdf, aes( x = w, y = value, color = Model)) + 
-  geom_line( linewidth = .8) + scale_x_log10( limits = c( 10, NA)) + 
-  scale_y_log10( limits = c( 100000000, NA)) + theme_bw() +
-  labs ( x = 'Weigth [g]', y = 'Biomass density [g]', color = 'Period')
+ggplot( tpdf %>% filter(w>10), aes( x = w, y = value, color = Model)) + 
+  geom_line( linewidth = .8) + scale_x_log10() + scale_y_log10() + theme_bw() +
+  labs ( x = 'Weigth [g]', y = 'Biomass density', color = 'Period')
 
 ggsave( paste0( tpdir, 'spectra_comparison.jpg'), width = 12, height = 7)
+ggsave( paste0( tpdir, 'spectra_comparison_ppt.jpg'), width = 6, height = 4)
+
+ggplot( tpdf %>% filter(w>10), aes( x = w, y = value2, color = Model)) + 
+  geom_line( linewidth = .8) + scale_x_log10() + scale_y_log10() + theme_bw() +
+  labs ( x = 'Weigth [g]', y = 'Biomass density [g]', color = 'Period')
+
+ggsave( paste0( tpdir, 'spectra_comparison2.jpg'), width = 12, height = 7)
+ggsave( paste0( tpdir, 'spectra_comparison2_ppt.jpg'), width = 6, height = 4)
 
 
 tp_table <- matrix( NA, nrow = length(tp_mods), ncol = length(all_pars), 
-                      dimnames = list( names(tp_mods), all_pars))
+                    dimnames = list( names(tp_mods), all_pars))
 
-for(i in names(tp_mods)){
-  tp_table[i,] <- c( 
-    signif( getBiomass( tp_mods[[i]])/tp_mods[[i]]@species_params$biomass_observed,3),
-    signif( (getYield( tp_mods[[i]])/sum( tp_mods[[i]]@gear_params$yield_observed)),3),
-    signif( as.numeric(species_params(tp_mods[[i]])[nofixed]),3),
-    signif( as.numeric(resource_params(tp_mods[[i]])[res_pars]),3))
-}
-
+for(i in names(tp_mods)){ tp_table[i,] <- parsf( tp_mods[[i]])}
 tp_table
 
 
-tpcdir <- paste0( tpdir, 'cannibal/')
-dir.create( path = tpcdir, showWarnings = TRUE, recursive = TRUE)
 
-tp_cann <- list()
-tpc_table <- NULL
+## NM and cannibalism for TP -------------
+
+tp_cann1 <- list()
+tp_cann2 <- list()
+tpc_table1 <- NULL
+tpc_table2 <- NULL
+
+tp_nm1 <- list()
+tp_nm2 <- list()
+tp_nm3 <- list()
+tpnm_table1 <- NULL
+tpnm_table2 <- NULL
+tpnm_table3 <- NULL
 
 for(i in 1:length(tp_mods)){
   
-  icann <- tp_mods[[i]]
+  inm1 <- inm2 <- inm3 <- icann <- icann2 <- tp_mods[[i]]
   iname <- names(tp_mods)[[i]]
+  
+  ifiles <- list.files( list.files(tpdir, full.names = TRUE)[i], full.names = TRUE)
+  
+  # NLS power law fit
+  
+  mu0_lm <- NatM_pars['lm','mu0']; d_lm <- NatM_pars['lm','d']
+  lm_mort <- mu0_lm*w(tp_mods[[i]])^(d_lm)
+  
+  mu0_DB <- NatM_pars['ad_hoc','mu0']; d_DB <- NatM_pars['ad_hoc','d']
+  DB_mort <- mu0_DB*w(tp_mods[[i]])^(d_DB)
+  
+  mu0_nls <- NatM_pars['nls','mu0']; d_nls <- NatM_pars['nls','d']
+  nls_mort <- mu0_nls*w(tp_mods[[i]])^(d_nls)
+  
+  ext_mort( inm1) <- array( lm_mort, dim=c(1,bins_no))
+  ext_mort( inm2) <- array( DB_mort, dim=c(1,bins_no))
+  ext_mort( inm3) <- array( nls_mort, dim=c(1,bins_no))
+  
+  species_params( inm1)[c('d','M')] <- c( d_lm, mu0_lm)
+  species_params( inm2)[c('d','M')] <- c( d_DB, mu0_DB)
+  species_params( inm3)[c('d','M')] <- c( d_nls, mu0_nls)
   
   vy <- years[[i]]
   
   pcann <- mean( cannibal_byyear$Percentage[ which(cannibal_byyear$Year %in% vy)])
-  interaction_matrix( icann)[] <- pcann
-  ext_mort( icann) <- ext_mort( icann) - getPredMort( icann)
+  interaction_matrix( icann1)[] <- pcann
+  interaction_matrix( icann2)[] <- pcann
   
-  tp_cann[[iname]] <- icann <- MIZER( model = icann, catch = corLFD_list[[i]], 
-    plot = T, plot_dir = paste0(tpcdir,iname,'/'))
+  ext_mort( icann1) <- ext_mort( icann1) - getPredMort( icann1)
   
-  tpc_table <- rbind( tpc_table, c( 
-    signif( getBiomass( icann)/icann@species_params$biomass_observed,3),
-    signif( getYield( icann)/sum( icann@gear_params$yield_observed),3),
-    signif( as.numeric(species_params(icann)[nofixed]),3),
-    signif( as.numeric(resource_params(icann)[res_pars]),3)))
+  tp_cann1[[iname]] <- icann1 <- MIZER( model = icann1, catch = corLFD_list[[i]], compiler = compiler, 
+                                        plot = T, plot_dir = paste0(cdir,iname,'/minus/'))
   
-  s1 <- plotSpectra2( tp_mods[[i]], name1 = "No cannibalism", tp_cann[[i]], name2 = "With cannibalism",
-    power = 2, resource = FALSE)
+  tp_cann2[[iname]] <- icann2 <- MIZER( model = icann2, catch = corLFD_list[[i]], compiler = compiler, 
+                                        plot = T, plot_dir = paste0(cdir,iname,'/plus/'))
   
-  ggplot( s1$data, aes( x = w, y = value, color = Model)) + 
-    geom_line( linewidth = .8) + scale_x_log10( limits = c( 10, NA)) + 
-    theme_bw() +
+  tp_nm1[[iname]] <- inm1 <- MIZER( model = inm1, catch = corLFD_list[[i]], compiler = compiler, 
+                                    plot = T, plot_dir = paste0(tpnmdir,iname,'/lm/'))
+  
+  tp_nm2[[iname]] <- inm2 <- MIZER( model = inm2, catch = corLFD_list[[i]], compiler = compiler, 
+                                    plot = T, plot_dir = paste0(tpnmdir,iname,'/adhoc/'))
+  
+  tp_nm3[[iname]] <- inm3 <- MIZER( model = inm3, catch = corLFD_list[[i]], compiler = compiler, 
+                                    plot = T, plot_dir = paste0(tpnmdir,iname,'/nls/'))
+  
+  file.copy( ifiles, paste0( tpnmdir,iname,'/'), recursive = TRUE)
+  file.copy( ifiles, paste0( cdir,iname,'/'), recursive = TRUE)
+  
+  tpc_table1 <- rbind( tpc_table1, parsf(icann1))
+  tpc_table2 <- rbind( tpc_table2, parsf(icann2))
+  
+  tpnm_table1 <- rbind( tpnm_table1, parsf(inm1))
+  tpnm_table2 <- rbind( tpnm_table2, parsf(inm2))
+  tpnm_table3 <- rbind( tpnm_table3, parsf(inm3))
+  
+  tpb <- spf( tp_mods[[i]], name = 'Base Model') 
+  ctp1 <- spf( tp_cann1[[i]], name = "With Cannibalism")
+  ctp2 <- spf( tp_cann2[[i]], name = "Cannibalism + NM")
+  
+  mtp1 <- spf( tp_nm1[[i]], name = "Linear Model")
+  mtp2 <- spf( tp_nm2[[i]], name = "ad-hoc Model")
+  mtp3 <- spf( tp_nm3[[i]], name = "NLS Model")
+  
+  cfdf <- rbind( tpb, ctp1, ctp2) %>% filter(w>10)
+  mfdf <- rbind( mtp1, mtp2, mtp3) %>% filter(w>10)
+  
+  ggplot( cfdf, aes( x = w, y = value, color = Model)) + 
+    geom_line( linewidth = .8) + scale_x_log10() + theme_bw() +
+    labs ( x = 'Weigth [g]', y = 'Biomass density', color = 'Model')
+  
+  ggsave( paste0( cdir, iname, '/spectra_comparison.jpg'), width = 6, height = 4)
+  
+  ggplot( cfdf, aes( x = w, y = value2, color = Model)) + 
+    geom_line( linewidth = .8) + scale_x_log10() + theme_bw() +
     labs ( x = 'Weigth [g]', y = 'Biomass density [g]', color = 'Model')
   
-  ggsave( paste0( tpcdir,iname, '-spectra_comparison.jpg'), width = 12, height = 7)
+  ggsave( paste0( cdir,iname, '/spectra_comparison2.jpg'), width = 6, height = 4)
   
-  ip1 <- plotDeath( tp_mods[[i]], return_data = T)
-  ip2 <- plotDeath( tp_cann[[i]], return_data = T)
+  ggplot( mfdf, aes( x = w, y = value, color = Model)) + 
+    geom_line( linewidth = .8) + scale_x_log10() + theme_bw() +
+    labs ( x = 'Weigth [g]', y = 'Biomass density', color = 'Model')
   
-  ip1$Model = 'No cannibalism'
-  ip2$Model = 'With cannibalism'
+  ggsave( paste0( tpnmdir,iname, '/spectra_comparison.jpg'), width = 6, height = 4)
   
-  ippt <- rbind( ip1, ip2)
-  ippt <- ippt %>% mutate(Cause = factor( Cause, levels = c("External", "Fishing", "Hake"), labels = c("Natural", "Fishing", "Cannibalism")))
+  ggplot( mfdf, aes( x = w, y = value2, color = Model)) + 
+    geom_line( linewidth = .8) + scale_x_log10() + theme_bw() +
+    labs ( x = 'Weigth [g]', y = 'Biomass density', color = 'Model')
   
-  ipdeath <- ggplot(ippt, aes(x = w, y = value, fill = Cause)) +
+  ggsave( paste0( tpnmdir,iname, '/spectra_comparison2.jpg'), width = 6, height = 4)
+  
+  
+  cd0 <- plotDeath( tp_mods[[i]], return_data = T)
+  cd1 <- plotDeath( tp_cann1[[i]], return_data = T)
+  cd2 <- plotDeath( tp_cann2[[i]], return_data = T)
+  
+  md1 <- plotDeath( tp_nm1[[i]], return_data = T)
+  md2 <- plotDeath( tp_nm2[[i]], return_data = T)
+  md3 <- plotDeath( tp_nm3[[i]], return_data = T)
+  
+  cd0$Model = 'Base Model'
+  cd1$Model = 'With Cannibalism'
+  cd2$Model = 'Cannibalism + NM'
+  
+  md1$Model = 'Linear Model'
+  md2$Model = 'ad-hoc Model'
+  md3$Model = 'NLS Model'
+  
+  cippt <- rbind( cd0, cd1, cd2) %>% filter(w>1)
+  mippt <- rbind( md1, md2, md3) %>% filter(w>1)
+  
+  cippt <- cippt %>% mutate(Cause = factor( Cause, levels = c("External", "Fishing", "Hake"), labels = c("Natural", "Fishing", "Cannibalism")))
+  mippt <- mippt %>% mutate(Cause = factor( Cause, levels = c("External", "Fishing", "Hake"), labels = c("Natural", "Fishing", "Cannibalism")))
+  
+  cippt$Model <- factor( cippt$Model, levels = c( "Base Model","With Cannibalism","Cannibalism + NM"))
+  
+  cdeath <- ggplot( cippt, aes(x = w, y = value, fill = Cause)) +
     geom_area(position = "stack") + scale_x_log10() +   theme_bw() +
     facet_wrap(~ Model) + labs( x = "Weight [g]", y = "Proportion of Death", fill = "Mortality Cause") +
     scale_fill_manual( values = c("Natural" = "#66c2a5", "Fishing" = "#fc8d62", "Cannibalism" = "#8da0cb"),
                        labels = c("Natural" = "Natural", "Fishing" = "Fishing", "Cannibalism" = "Cannibalism"))
   
-  ipdeath
-
-  ggsave( paste0( tpcdir,iname, '-death_comparison.jpg'), width = 12, height = 7)
+  cdeath
+  
+  ggsave( paste0( cdir,iname, '/death_comparison.jpg'), width = 6, height = 4)
+  
+  mdeath <- ggplot( mippt, aes(x = w, y = value, fill = Cause)) +
+    geom_area(position = "stack") + scale_x_log10() +   theme_bw() +
+    facet_wrap(~ Model) + labs( x = "Weight [g]", y = "Proportion of Death", fill = "Mortality Cause") +
+    scale_fill_manual( values = c("Natural" = "#66c2a5", "Fishing" = "#fc8d62", "Cannibalism" = "#8da0cb"),
+                       labels = c("Natural" = "Natural", "Fishing" = "Fishing", "Cannibalism" = "Cannibalism"))
+  
+  mdeath
+  
+  ggsave( paste0( tpnmdir,iname, '/death_comparison.jpg'), width = 6, height = 4)
+  
+  wv <- as.numeric(icann@w)
+  
+  tpb$Mort <- as.numeric(getMort(tp_mods[[i]])); tpb$Growth <- as.numeric(getEGrowth(tp_mods[[i]]))
+  ctp1$Mort <- as.numeric(getMort(icann1)); ctp1$Growth <- as.numeric(getEGrowth(icann1))
+  ctp2$Mort <- as.numeric(getMort(icann2)); ctp2$Growth <- as.numeric(getEGrowth(icann2))
+  
+  mtp1$Mort <- as.numeric(getMort(inm1)); mtp1$Growth <- as.numeric(getEGrowth(inm1))
+  mtp2$Mort <- as.numeric(getMort(inm2)); mtp2$Growth <- as.numeric(getEGrowth(inm2))
+  mtp3$Mort <- as.numeric(getMort(inm3)); mtp3$Growth <- as.numeric(getEGrowth(inm3))
+  
+  
+  cffdf <- rbind( tpb, ctp1, ctp2) %>% filter(w>10)
+  mffdf <- rbind( mtp1, mtp2, mtp3) %>% filter(w>10)
+  
+  cffdf$Model <- factor(cffdf$Model, levels = c("Base Model","With Cannibalism","Cannibalism + NM"))
+  
+  ggplot( cffdf, aes(x = w, y = Mort, color = Model)) +
+    geom_line( linewidth = 0.8) + scale_x_log10() +   theme_bw() + 
+    labs( x = "Weight [g]", y = "Mortality")
+  
+  ggsave( paste0( cdir,iname, '/mortality_comparison.jpg'), width = 6, height = 4)
+  
+  ggplot( cffdf, aes(x = w, y = Growth, color = Model)) +
+    geom_line( linewidth = 0.8) + scale_x_log10() +   theme_bw() +
+    labs( x = "Weight [g]")
+  
+  ggsave( paste0( cdir,iname, '/growth_comparison.jpg'), width = 6, height = 4)
+  
+  ggplot( mffdf, aes(x = w, y = Mort, color = Model)) +
+    geom_line( linewidth = 0.8) + scale_x_log10() +   theme_bw() +
+    labs( x = "Weight [g]", y = "Mortality")
+  
+  ggsave( paste0( tpnmdir,iname, '/mortality_comparison.jpg'), width = 6, height = 4)
+  
+  ggplot( mffdf, aes(x = w, y = Growth, color = Model)) +
+    geom_line( linewidth = 0.8) + scale_x_log10() +   theme_bw() +
+    labs( x = "Weight [g]")
+  
+  ggsave( paste0( tpnmdir,iname, '/growth_comparison.jpg'), width = 6, height = 4)
+  
   
 }
 
-rownames(tpc_table) <- paste0('cann_',names(tp_mods))
 
-alltp_tab <- rbind( tp_table, tpc_table)
-alltp_tab
+
+# Save all ----------------------
 
 save.image( './output/alldata.RData')
 

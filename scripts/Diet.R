@@ -12,6 +12,7 @@ library(reshape)
 library(sm)
 library(tidyr)
 
+dir.create( path = paste0( getwd(), '/plots/data/diet'), showWarnings = TRUE, recursive = TRUE)
 
 # Diet data ----------------------
 
@@ -104,6 +105,8 @@ by_prey2 <- by_prey %>%
   arrange(desc(Mean_Percentage))
 by_prey2
 
+ggsave( "./plots/data/diet/diet1.jpg", width = 6, height = 4)
+
 qplot2 <- ggplot(by_prey2, aes(x = "", y = Mean_Percentage, fill = Prey)) +
   geom_bar(stat = "identity", width = 1, color = "white") + 
   coord_polar(theta = "y") +
@@ -112,6 +115,8 @@ qplot2 <- ggplot(by_prey2, aes(x = "", y = Mean_Percentage, fill = Prey)) +
   theme_minimal() + theme(axis.title.x = element_blank(), axis.title.y = element_blank(), 
                           axis.text = element_blank(),panel.grid = element_blank())
 qplot2
+
+ggsave( "./plots/data/diet/diet2.jpg", width = 6, height = 4)
 
 
 
@@ -138,19 +143,31 @@ cannibal2 <- subset(cannibal_complete, Year>=1996)
 # cannibalplot
 
 cannibalplot <- ggplot( cannibal_complete, aes(x = Year, y = Percentage, fill = Size)) +
-  geom_bar(stat = "identity", position = "stack") + 
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8)) + 
   theme_minimal() +
-  geom_line(data = cannibal_byyear, aes(x = Year, y = Percentage), color = "black", linetype = 4, inherit.aes = FALSE) +
+  geom_line(data = cannibal_byyear, aes(x = Year, y = Percentage), color = "black", linetype = 1, inherit.aes = FALSE) +
   geom_hline(data = cannibal, aes(yintercept = Percentage, color = Size), linetype = 2) +
   labs(title = "Cannibalism", fill = 'Predator Size', color = 'Average')
 
 print(cannibalplot)
 
+cannibal_comp2 <- cannibal_complete
+cannibal_comp2$Percentage <- cannibal_complete$Percentage/3
+
+cannibalplot <- ggplot( cannibal_comp2, aes(x = Year, y = Percentage, fill = Size)) +
+  geom_bar(stat = "identity", position = 'stack') + 
+  theme_minimal() +
+  # geom_hline(data = cannibal, aes(yintercept = Percentage, color = Size), linetype = 2) +
+  labs(title = "Cannibalism", fill = 'Predator Size', color = 'Average')
+
+cannibalplot
+
+ggsave( "./plots/data/diet/cannibalism.jpg", width = 6, height = 4)
 
 
 # Save --------------
 
-pdf("./plots/data/diet.pdf", width = 10, height = 6, onefile = TRUE)
+pdf("./plots/data/diet/diet.pdf", width = 10, height = 6, onefile = TRUE)
 print(yplot2)
 print(gplot2)
 print(qplot2)
