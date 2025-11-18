@@ -1,6 +1,5 @@
 ######## Hake's Predation fit for MIZER ##########
 
-
 rm(list=ls())
 
 library(dplyr)

@@ -106,11 +106,11 @@ double_normal_sel <- function( w, params) {
   peak1 <- params[1]
   upselex <- exp(params[3])
   downselex <- exp(params[4])
-
+  
   peak2 <- peak1 + (0.99 * max(w) - peak1) / (1 + exp(-params[2]))
   point1 <- ifelse(params[5] > 0, params[5], NA)
   point2 <- ifelse(params[6] > 0, params[6], NA)
-
+  
   t1min <- if (!is.na(point1)) exp(-((min(w) - peak1)^2) / upselex) else NA
   t2min <- if (!is.na(point2)) exp(-((max(w) - peak2)^2) / downselex) else NA
   
@@ -149,7 +149,7 @@ getEnergy <- function( model, return_df = FALSE, log = FALSE){
   mgrowth <- as.numeric(getEGrowth(model))
   mmetab <- as.numeric(getMetabolicRate(model))
   merg <- as.numeric(getEReproAndGrowth(model))
-    
+  
   metab <- sp$ks * wt^sp$p
   activ <- sp$k * wt
   totale <- sp$alpha*sp$f0*(sp$h*wt^sp$n)
@@ -167,7 +167,7 @@ getEnergy <- function( model, return_df = FALSE, log = FALSE){
                              Weight = wt, Type = 'MIZER'))
   
   dafr_long <- dafr %>% pivot_longer( cols = c(ERepro, ReproProp, EGrowth, EReproandGrowth),
-      names_to = "Variable", values_to = "Value")
+                                      names_to = "Variable", values_to = "Value")
   
   pl <- ggplot( dafr_long, aes(x = Weight, y = Value, color = Type)) +
     geom_line() + facet_wrap(~ Variable, scales = "free_y", ncol = 1) +
@@ -279,7 +279,7 @@ plot_wfd <- function( model, catch, return_df = FALSE) {
   
   Cw_total <- Cw_total / sum(Cw_total * model@dw)
   df <- data.frame( Weight = w, Catch_w = Cw_total, Type = "Estimated")
-    
+  
   obs_w <- aggregate(number ~ weight, data = catch, FUN = sum)
   obs_w$number <- obs_w$number / sum(obs_w$number)
   
@@ -299,7 +299,7 @@ plot_wfd <- function( model, catch, return_df = FALSE) {
 }
 
 plot_wfd_gear <- function( model, catch, return_df = FALSE){
-
+  
   w <- model@w
   gp <- gear_params(model)
   Nw <- as.numeric(model@initial_n)
@@ -332,3 +332,21 @@ plot_wfd_gear <- function( model, catch, return_df = FALSE){
   
 }
 
+
+spf <- function( model, name = 'Hake Model'){
+  lwt <- length(model@w)
+  wt <- model@w[-lwt]
+  return( data.frame( w = wt, value = wt*model@initial_n[-lwt], value2 = wt*wt*model@initial_n[-lwt], Model = name))
+}
+
+
+parsf <- function( model, nofixed = c('gamma','q','n','ks','p','k','alpha'), res_pars = c('kappa','lambda')){ 
+  all_pars <- c( 'inc_SSB', 'inc_Y', nofixed, res_pars)
+  parsv <- c( 
+    signif( getBiomass( model)/model@species_params$biomass_observed,3),
+    signif( getYield( model)/sum( model@gear_params$yield_observed),3),
+    signif( as.numeric(species_params(model)[nofixed]),3),
+    signif( as.numeric(resource_params(model)[res_pars]),3))
+  names(parsv) <- all_pars
+  return(parsv)
+}

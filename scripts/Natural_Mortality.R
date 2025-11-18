@@ -11,6 +11,8 @@ library(tidyr)
 
 source( './scripts/aux_functions.R')
 
+dir.create( path = paste0( getwd(), '/plots/data/natural_mortality'), showWarnings = TRUE, recursive = TRUE)
+
 
 # SS data --------------------------------------------------------------
 
@@ -50,86 +52,140 @@ lines( laf( seq( 0, Linf, length.out=500), Linf, Kvb, al0), seq( 0, Linf, length
 
 M <- ss_stk$Natural_Mortality_Bmark
 
-M_female <- subset( M, Seas==1 & Settlement==1 & Sex==1)   # Females (Season 1 Settlement 1)
-M_male <- subset( M, Seas==1 & Settlement==1 & Sex==2)   # Males (Season 1 Settlement 1)
-NatM <- (M_female[-(1:4)] + M_male[-(1:4)])/2    # Mean of both sexes
+M_female <- subset( M, Seas==1 & Settlement==1 & Sex==1)[-(1:4)]   # Females (Season 1 Settlement 1)
+M_male <- subset( M, Seas==1 & Settlement==1 & Sex==2)[-(1:4)]   # Males (Season 1 Settlement 1)
+NatM <- ( M_female + M_male)/2    # Mean of both sexes
 
 ages <- as.numeric( names( NatM))
 NatM <- as.numeric( NatM)
 
 lengths <- alf( ages, Linf, Kvb, al0)
 lengths[1] <- 4
-names(lengths) <- names(NatM) <- ages
+
+weights <- lwf( lengths,a,b)
+
+names(lengths) <- names(weights) <- names(NatM) <- ages
 
 
-#- Eval. of straight lines between values at x(age)=0,1,5,15
-len0_1 <- seq( floor(lengths['0']), floor(lengths['1']), by =0.1)
-len1_5 <- ceiling(lengths['1']):floor(lengths['5'])
-len5_15 <- ceiling(lengths['5']):ceiling(lengths['15'])
+mdf <- rbind( 
+  data.frame( Ages = ages, Length = lengths, Weight = weights, Sex = 'Female', Mortality = as.numeric(M_female)),
+  data.frame( Ages = ages, Length = lengths, Weight = weights, Sex = 'Male', Mortality = as.numeric(M_male)))
 
-NatM0_1 <- linef( len0_1, lengths['0'], lengths['1'], NatM['0'], NatM['1'])
-NatM1_5 <- linef( len1_5, lengths['1'], lengths['5'], NatM['1'], NatM['5'])
-NatM5_15 <- linef( len5_15, lengths['5'], lengths['15'], NatM['5'], NatM['15'])
+ggplot( mdf, aes( x = Ages, y = Mortality, color = Sex)) + theme_bw() + 
+  geom_line() + geom_point()
 
-NatMt <- c( NatM0_1, NatM1_5, NatM5_15)
-lvec <- c( len0_1, len1_5, len5_15)
+ggsave( "./plots/data/natural_mortality/natural_mortality_SS.jpg", width = 5, height = 4)
 
-M_ext <- data.frame( length = lvec, weight = a*(lvec)^b, NatM = NatMt)
 
-M_ext %>% ggplot( aes( x = length, y = NatM)) +
+ggplot( mdf, aes( x = Length, y = Mortality, color = Sex)) + theme_bw() + 
+  geom_line() + geom_point()
+
+ggplot( mdf, aes( x = Weight, y = Mortality, color = Sex)) + theme_bw() + 
+  geom_line() + geom_point()
+
+
+M_ext <- data.frame( Ages = ages, Length = lengths, Weight = weights, Sex = 'Average', Mortality = as.numeric(NatM))
+
+fmdf <- rbind( mdf, M_ext)
+
+ggplot( fmdf, aes( x = Ages, y = Mortality, color = Sex)) + theme_bw() + 
+  geom_line() + geom_point()
+
+ggsave( "./plots/data/natural_mortality/natural_mortality_SS_aver.jpg", width = 5, height = 4)
+
+ggplot( fmdf, aes( x = Length, y = Mortality, color = Sex)) + theme_bw() + 
+  geom_line() + geom_point()
+
+ggplot( fmdf, aes( x = Weight, y = Mortality, color = Sex)) + theme_bw() + 
+  geom_line() + geom_point()
+
+
+
+# #- Eval. of straight lines between values at x(age)=0,1,5,15
+# len0_1 <- seq( floor(lengths['0']), floor(lengths['1']), by =0.1)
+# len1_5 <- ceiling(lengths['1']):floor(lengths['5'])
+# len5_15 <- ceiling(lengths['5']):ceiling(lengths['15'])
+# 
+# NatM0_1 <- linef( len0_1, lengths['0'], lengths['1'], NatM['0'], NatM['1'])
+# NatM1_5 <- linef( len1_5, lengths['1'], lengths['5'], NatM['1'], NatM['5'])
+# NatM5_15 <- linef( len5_15, lengths['5'], lengths['15'], NatM['5'], NatM['15'])
+# 
+# NatMt <- c( NatM0_1, NatM1_5, NatM5_15)
+# lvec <- c( len0_1, len1_5, len5_15)
+# 
+# M_ext <- data.frame( length = lvec, weight = a*(lvec)^b, NatM = NatMt)
+
+M_ext %>% ggplot( aes( x = Length, y = Mortality)) +
   geom_line() + ylab("Mortality") + xlab("Length (cm)") + theme_bw()
 
-M_ext %>% ggplot( aes( x = weight, y = NatM)) +
+ggsave( "./plots/data/natural_mortality/natural_mortality_SS_l.jpg", width = 4, height = 2)
+
+M_ext %>% ggplot( aes( x = Weight, y = Mortality)) +
   geom_line() + ylab("Mortality") + xlab("Weigth (g)") + theme_bw()
+
+ggsave( "./plots/data/natural_mortality/natural_mortality_SS_w.jpg", width = 4, height = 2)
 
 
 ### Power law fitting: mu(w)=mu0*w^d ----------
 
-# Nonlinear least squares (NLS) fit
+fit <- nls( Mortality ~ I( mu0 * Weight^d), data = M_ext, start = list( mu0=1.5, d=-0.05))
 
-fit <- nls( NatM ~ I( mu0 * weight^d), data=M_ext, start=list(mu0=2,d=0))
+fitlm <- lm( log10(Mortality) ~ log10(Weight), data = M_ext)
 
-fitlm <- lm( log10(NatM) ~ log10(weight), data = M_ext)
+lmdf <- data.frame( NatM = NatM, weight = weights)
 
-mu0 <- coef(fit)['mu0'] 
-d <- coef(fit)['d']
+mu0_nls <- coef(fit)['mu0'] 
+d_nls <- coef(fit)['d']
 
 mu0_lm <- 10^coef(fitlm)['(Intercept)']
-d_lm <- coef(fitlm)['log10(weight)']
+d_lm <- coef(fitlm)['log10(Weight)']
 
-NatM <- M_ext %>% mutate( M_fit.db = .7629334*(weight)^(-0.1094125)) %>% 
-  mutate( M_fit = mu0*(weight)^d) %>%
-  mutate( M_fit.lm = mu0_lm*(weight)^d_lm)
+NatM <- M_ext %>% mutate( M_fit.db = .7629334*(weights)^(-0.1094125)) %>% 
+  mutate( M_fit = mu0_nls*(weights)^d_nls) %>%
+  mutate( M_fit.lm = mu0_lm*(weights)^d_lm)
 
-NatM_pars <- matrix( c( .7629334, -0.1094125,
-                        coef(fit)['mu0'], coef(fit)['d'],
-                        10^coef(fitlm)['(Intercept)'], coef(fitlm)['log10(weight)']), 
-                     byrow=T, 3, 2, dimnames = list( c('DB','nls','lm'), c('mu0','d')))
+NatM_pars <- matrix( c( .7629334, -0.1094125, mu0_nls, d_nls, mu0_lm, d_lm),
+                     byrow=T, 3, 2, dimnames = list( c('ad_hoc','nls','lm'), c('mu0','d')))
 
-M_ext_plot <- NatM %>% pivot_longer( cols = NatM:M_fit.lm, names_to = "Model", values_to = "Mortality")
+NatM_pars
 
-lnmplot <- M_ext_plot %>% ggplot( aes( x = length, y = Mortality, col = Model)) + 
-  geom_line( ) + geom_point( data = subset( M_ext_plot, Model == 'NatM')) + 
-  theme_bw() + labs( x = "Length (cm)", color= "Model")
+M_ext_plot <- NatM %>% pivot_longer( cols = Mortality:M_fit.lm, names_to = "Model", values_to = "Mortality")
+
+M_ext_plot <- M_ext_plot %>% mutate( Model = case_when(
+  Model == "Mortality" ~ "SS model (input)", Model == "M_fit" ~ "Non-parametric model",
+  Model == "M_fit.lm" ~ "Linear model", Model == "M_fit.db" ~ "ad hoc model", TRUE ~ Model))
+
+mcols = c( "SS model (input)" = "black", "Non-parametric model" = "#1b9e77", "Linear model" = "#d95f02", "ad hoc model" = "#7570b3")
+mlines <- c( "SS model (input)" = 1.2, "Non-parametric model" = 0.8, "Linear model" = 0.8, "ad hoc model" = 0.8)
+
+lnmplot <- M_ext_plot %>% ggplot( aes( x = Length, y = Mortality, col = Model, linewidth = Model)) + 
+  geom_line() + theme_bw() + labs( x = "Length (cm)", color= "Model") +
+  scale_color_manual( values = mcols) + scale_linewidth_manual( values = mlines)
 lnmplot
 
-wnmplot <- M_ext_plot %>% ggplot( aes( x = weight, y = Mortality, col = Model)) + 
-  geom_line( ) + geom_point( data = subset( M_ext_plot, Model == 'NatM')) + 
-  theme_bw() + labs( x = "Weight (g)", color= "Model")
+ggsave( "./plots/data/natural_mortality/natural_mortality_fit_l.jpg", width = 6, height = 4)
+
+wnmplot <- M_ext_plot %>% ggplot( aes( x = Weight, y = Mortality, col = Model, linewidth = Model)) + 
+  geom_line() + theme_bw() + labs( x = "Weight (g)", color= "Model") +
+  scale_color_manual( values = mcols) + scale_linewidth_manual( values = mlines)
 wnmplot
 
-lognmplot <- M_ext_plot %>% ggplot( aes( x = weight, y = Mortality, col = Model)) + 
-  scale_x_log10() + scale_y_log10() +
-  geom_line( ) + geom_point( data = subset( M_ext_plot, Model == 'NatM')) + 
-  theme_bw() + labs( y = "log( mortality)", x = "log( weight (g))", color= "Model")
+ggsave( "./plots/data/natural_mortality/natural_mortality_fit_w.jpg", width = 6, height = 3)
+
+lognmplot <- M_ext_plot %>% ggplot( aes( x = Weight, y = Mortality, col = Model, linewidth = Model)) + 
+  scale_x_log10() + scale_y_log10() + geom_line() + theme_bw() + 
+  labs( y = "log-Mortality", x = "log-Weight (g)", color= "Model") +
+  scale_color_manual( values = mcols) + scale_linewidth_manual( values = mlines)
 lognmplot
 
+ggsave( "./plots/data/natural_mortality/natural_mortality_fit_logw.jpg", width = 6, height = 3)
 
-pdf("./plots/data/natural_mortality_fit.pdf", width = 10, height = 6, onefile = TRUE)
+pdf("./plots/data/natural_mortality/natural_mortality_fit.pdf", width = 10, height = 6, onefile = TRUE)
 print(lnmplot)
 print(wnmplot)
 print(lognmplot)
 dev.off()
+
 
 save( NatM, NatM_pars, file = './data/Natural_Mortality.RData')
 

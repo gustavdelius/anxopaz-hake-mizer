@@ -1,7 +1,7 @@
 
 MIZER <- function( model, catch, w_from_catch = TRUE, compiler = FALSE,
                    nofixed = NULL, fixed_sel = FALSE, low_bounds = NULL, upp_bounds = NULL,
-                   yield_lambda = 1e7, biomass_lambda = 1e7, 
+                   yield_lambda = 1e7, biomass_lambda = 1e7, cannibalism = 'add',
                    plot = F, plot_dir = getwd()) {
   
   # Prefit
@@ -22,7 +22,7 @@ MIZER <- function( model, catch, w_from_catch = TRUE, compiler = FALSE,
       select(all_of(gears)) %>% as.matrix()
     
   } else {
-
+    
     w <- exp( seq( log(sp$w_min), log(sp$w_max), length.out = length(model@w)))
     lengths <- wlf( w, sp$a, sp$b)
     
@@ -42,7 +42,7 @@ MIZER <- function( model, catch, w_from_catch = TRUE, compiler = FALSE,
   wp <- c( exp(seq(log(model@w_full[1]), min(log(w)), length.out = 288-length(w)+1)), w)
   
   data_list <- list( counts = counts, w = w, wp = wp, yield = gp$yield_observed, biomass = sp$biomass_observed,
-    yield_lambda = yield_lambda, biomass_lambda = biomass_lambda, n_g = n_g)
+                     yield_lambda = yield_lambda, biomass_lambda = biomass_lambda, n_g = n_g)
   
   log_eff <- log(as.numeric(initial_effort(model)))
   
@@ -66,7 +66,7 @@ MIZER <- function( model, catch, w_from_catch = TRUE, compiler = FALSE,
     lower_bounds[paste0(i,1:n_g)] <- rep(-Inf,n_g)
     upper_bounds[paste0(i,1:n_g)] <- rep(Inf,n_g)}
   }
-
+  
   for(i in 1:n_g) lower_bounds[paste0('log_effort',i)] <- upper_bounds[paste0('log_effort',i)] <- log_eff[i]
   
   for( i in c('kappa','lambda')){ 
@@ -98,7 +98,7 @@ MIZER <- function( model, catch, w_from_catch = TRUE, compiler = FALSE,
     if( i %in% nofixed){ 
       lower_bounds[iname] <- -Inf; upper_bounds[iname] <- Inf
       if(i %in% c('inter_HH','inter_HR')){lower_bounds[iname] <- 0; upper_bounds[iname] <- 1}
-      } else {
+    } else {
       lower_bounds[iname] <- upper_bounds[iname] <- pars[[iname]]}
     
   }
@@ -109,7 +109,7 @@ MIZER <- function( model, catch, w_from_catch = TRUE, compiler = FALSE,
       bpars <- names(upp_bounds)
       for(i in bpars){ 
         if( i %in% c('d','inter_HR', 'inter_HH')){ upper_bounds[i] <- upp_bounds[[i]]
-          } else { upper_bounds[paste0('log_',i)] <- ifelse(i %in% c('alpha','n'), qlogis(upp_bounds[[i]]), log(upp_bounds[[i]]))}
+        } else { upper_bounds[paste0('log_',i)] <- ifelse(i %in% c('alpha','n'), qlogis(upp_bounds[[i]]), log(upp_bounds[[i]]))}
       }
     }
     
@@ -125,13 +125,30 @@ MIZER <- function( model, catch, w_from_catch = TRUE, compiler = FALSE,
   
   # Fit
   
-  if(compiler==T) TMB::compile("./TMB/fit.cpp", flags = "-Og -g", clean = TRUE, verbose = TRUE)
-  dyn.load( dynlib("./TMB/fit"))
+  if( cannibalism == 'add'){
+    
+    if( compiler == TRUE){
+      suppressWarnings(file.remove("./TMB/fit.o", "./TMB/fit.so"))
+      TMB::compile("./TMB/fit.cpp", flags = "-Og -g", clean = TRUE, verbose = TRUE)
+    }
+    
+    dyn.load( dynlib("./TMB/fit"))
+    obj <- MakeADFun( data = data_list, parameters = pars, DLL = "fit")
+    optim_result <- nlminb( obj$par, obj$fn, obj$gr, lower = lower_bounds, upper = upper_bounds,
+                            control = list( eval.max = 1000, iter.max = 1000))
+  } else {
+    
+    if( compiler == TRUE){
+      suppressWarnings(file.remove("./TMB/fit_cann.o", "./TMB/fit_cann.so"))
+      TMB::compile("./TMB/fit_cann.cpp", flags = "-Og -g", clean = TRUE, verbose = TRUE)
+    }
+    
+    dyn.load( dynlib("./TMB/fit_cann"))
+    obj <- MakeADFun( data = data_list, parameters = pars, DLL = "fit_cann")
+    optim_result <- nlminb( obj$par, obj$fn, obj$gr, lower = lower_bounds, upper = upper_bounds,
+                            control = list( eval.max = 1000, iter.max = 1000))
+  }
   
-  obj <- MakeADFun( data = data_list, parameters = pars, DLL = "fit")
-  
-  optim_result <- nlminb( obj$par, obj$fn, obj$gr, lower = lower_bounds, upper = upper_bounds,
-                          control = list( eval.max = 1000, iter.max = 1000))
   
   # Update model
   
@@ -184,8 +201,8 @@ MIZER <- function( model, catch, w_from_catch = TRUE, compiler = FALSE,
   model <- steadySingleSpecies(model)
   
   if( w_from_catch){ model@initial_n <- model@initial_n * (sp$biomass_observed / sum(model@initial_n * model@w * model@dw))
-    } else { model@initial_n[1,] <- obj$report(optim_result$par)$final_B / (w * c(diff(w),1))}
-
+  } else { model@initial_n[1,] <- obj$report(optim_result$par)$final_B / (w * c(diff(w),1))}
+  
   plot_lfd( model, catch)
   if(plot == T){
     dir.create( path = plot_dir, showWarnings = TRUE, recursive = TRUE)

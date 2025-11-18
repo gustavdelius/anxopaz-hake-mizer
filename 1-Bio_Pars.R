@@ -113,14 +113,14 @@ species_params(bio_pars)$age_mat <- a50
 load( './data/Natural_Mortality.RData')   # './scripts/Natural_Mortality.R' results
 # NLS power law fit
 
-mu0_nls <- NatM_pars['nls','mu0']
-d_nls <- NatM_pars['nls','d']
-nls_mort <- mu0_nls*w(bio_pars)^(d_nls)    
+mu0 <- NatM_pars['nls','mu0']
+d <- NatM_pars['nls','d']
+mort <- mu0*w(bio_pars)^(d)    
 
-ext_mort(bio_pars) <- array( nls_mort, dim=c(1,bins_no))
+ext_mort(bio_pars) <- array( mort, dim=c(1,bins_no))
 
-species_params(bio_pars)$d <- d_nls
-species_params(bio_pars)$M <- mu0_nls
+species_params(bio_pars)$d <- d
+species_params(bio_pars)$M <- mu0
 
 
 # Save ----------------
