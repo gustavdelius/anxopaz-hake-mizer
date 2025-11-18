@@ -8,5 +8,3 @@ Repository to work the hake model with Mizer for the FRESCO project. The scripts
 
 3-MIZER.R: The model for hake is built from the biological information, catches and data obtained from the current assessment for this stock and the selectivity is adjusted from a C++ function contained in the "TMB" folder.  
 
-4.1 and 4.2: Future work.  
-
