@@ -11,7 +11,7 @@ library(tidyr)
 
 source( './scripts/aux_functions.R')
 
-dir.create( path = paste0( getwd(), '/plots/data/natural_mortality'), showWarnings = TRUE, recursive = TRUE)
+dir.create( path = '/data/plots/natural_mortality', showWarnings = TRUE, recursive = TRUE)
 
 
 # SS data --------------------------------------------------------------
@@ -74,7 +74,7 @@ mdf <- rbind(
 ggplot( mdf, aes( x = Ages, y = Mortality, color = Sex)) + theme_bw() + 
   geom_line() + geom_point()
 
-ggsave( "./plots/data/natural_mortality/natural_mortality_SS.jpg", width = 5, height = 4)
+ggsave( "./data/plots/natural_mortality/natural_mortality_SS.jpg", width = 5, height = 4)
 
 
 ggplot( mdf, aes( x = Length, y = Mortality, color = Sex)) + theme_bw() + 
@@ -91,7 +91,7 @@ fmdf <- rbind( mdf, M_ext)
 ggplot( fmdf, aes( x = Ages, y = Mortality, color = Sex)) + theme_bw() + 
   geom_line() + geom_point()
 
-ggsave( "./plots/data/natural_mortality/natural_mortality_SS_aver.jpg", width = 5, height = 4)
+ggsave( "./data/plots/natural_mortality/natural_mortality_SS_aver.jpg", width = 5, height = 4)
 
 ggplot( fmdf, aes( x = Length, y = Mortality, color = Sex)) + theme_bw() + 
   geom_line() + geom_point()
@@ -118,12 +118,12 @@ ggplot( fmdf, aes( x = Weight, y = Mortality, color = Sex)) + theme_bw() +
 M_ext %>% ggplot( aes( x = Length, y = Mortality)) +
   geom_line() + ylab("Mortality") + xlab("Length (cm)") + theme_bw()
 
-ggsave( "./plots/data/natural_mortality/natural_mortality_SS_l.jpg", width = 4, height = 2)
+ggsave( "./data/plots/natural_mortality/natural_mortality_SS_l.jpg", width = 4, height = 2)
 
 M_ext %>% ggplot( aes( x = Weight, y = Mortality)) +
   geom_line() + ylab("Mortality") + xlab("Weigth (g)") + theme_bw()
 
-ggsave( "./plots/data/natural_mortality/natural_mortality_SS_w.jpg", width = 4, height = 2)
+ggsave( "./data/plots/natural_mortality/natural_mortality_SS_w.jpg", width = 4, height = 2)
 
 
 ### Power law fitting: mu(w)=mu0*w^d ----------
@@ -163,14 +163,14 @@ lnmplot <- M_ext_plot %>% ggplot( aes( x = Length, y = Mortality, col = Model, l
   scale_color_manual( values = mcols) + scale_linewidth_manual( values = mlines)
 lnmplot
 
-ggsave( "./plots/data/natural_mortality/natural_mortality_fit_l.jpg", width = 6, height = 4)
+ggsave( "./data/plots/natural_mortality/natural_mortality_fit_l.jpg", width = 6, height = 4)
 
 wnmplot <- M_ext_plot %>% ggplot( aes( x = Weight, y = Mortality, col = Model, linewidth = Model)) + 
   geom_line() + theme_bw() + labs( x = "Weight (g)", color= "Model") +
   scale_color_manual( values = mcols) + scale_linewidth_manual( values = mlines)
 wnmplot
 
-ggsave( "./plots/data/natural_mortality/natural_mortality_fit_w.jpg", width = 6, height = 3)
+ggsave( "./data/plots/natural_mortality/natural_mortality_fit_w.jpg", width = 6, height = 3)
 
 lognmplot <- M_ext_plot %>% ggplot( aes( x = Weight, y = Mortality, col = Model, linewidth = Model)) + 
   scale_x_log10() + scale_y_log10() + geom_line() + theme_bw() + 
@@ -178,9 +178,9 @@ lognmplot <- M_ext_plot %>% ggplot( aes( x = Weight, y = Mortality, col = Model,
   scale_color_manual( values = mcols) + scale_linewidth_manual( values = mlines)
 lognmplot
 
-ggsave( "./plots/data/natural_mortality/natural_mortality_fit_logw.jpg", width = 6, height = 3)
+ggsave( "./data/plots/natural_mortality/natural_mortality_fit_logw.jpg", width = 6, height = 3)
 
-pdf("./plots/data/natural_mortality/natural_mortality_fit.pdf", width = 10, height = 6, onefile = TRUE)
+pdf("./data/plots/natural_mortality/natural_mortality_fit.pdf", width = 10, height = 6, onefile = TRUE)
 print(lnmplot)
 print(wnmplot)
 print(lognmplot)

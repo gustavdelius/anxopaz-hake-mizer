@@ -12,7 +12,7 @@ library(reshape)
 library(sm)
 library(tidyr)
 
-dir.create( path = paste0( getwd(), '/plots/data/diet'), showWarnings = TRUE, recursive = TRUE)
+dir.create( path = './data/plots/diet', showWarnings = TRUE, recursive = TRUE)
 
 # Diet data ----------------------
 
@@ -105,7 +105,7 @@ by_prey2 <- by_prey %>%
   arrange(desc(Mean_Percentage))
 by_prey2
 
-ggsave( "./plots/data/diet/diet1.jpg", width = 6, height = 4)
+ggsave( "./data/plots/diet/diet1.jpg", width = 6, height = 4)
 
 qplot2 <- ggplot(by_prey2, aes(x = "", y = Mean_Percentage, fill = Prey)) +
   geom_bar(stat = "identity", width = 1, color = "white") + 
@@ -116,7 +116,7 @@ qplot2 <- ggplot(by_prey2, aes(x = "", y = Mean_Percentage, fill = Prey)) +
                           axis.text = element_blank(),panel.grid = element_blank())
 qplot2
 
-ggsave( "./plots/data/diet/diet2.jpg", width = 6, height = 4)
+ggsave( "./data/plots/diet/diet2.jpg", width = 6, height = 4)
 
 
 
@@ -162,12 +162,12 @@ cannibalplot <- ggplot( cannibal_comp2, aes(x = Year, y = Percentage, fill = Siz
 
 cannibalplot
 
-ggsave( "./plots/data/diet/cannibalism.jpg", width = 6, height = 4)
+ggsave( "./data/plots/diet/cannibalism.jpg", width = 6, height = 4)
 
 
 # Save --------------
 
-pdf("./plots/data/diet/diet.pdf", width = 10, height = 6, onefile = TRUE)
+pdf("./data/plots/diet/diet.pdf", width = 10, height = 6, onefile = TRUE)
 print(yplot2)
 print(gplot2)
 print(qplot2)
