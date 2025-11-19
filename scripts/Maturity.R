@@ -163,7 +163,7 @@ logwmplot + geom_vline( xintercept = c(lwf( L50_m, a, b), lwf( L50_f, a, b), w50
   geom_hline( yintercept = c(0.25, 0.5), linetype = 'dashed')
 
 
-pdf("./plots/data/maturity.pdf", width = 10, height = 6, onefile = TRUE)
+pdf("./data/plots/maturity.pdf", width = 10, height = 6, onefile = TRUE)
 print(lmplot)
 print(wmplot)
 print(logwmplot)
