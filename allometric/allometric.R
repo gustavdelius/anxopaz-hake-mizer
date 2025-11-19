@@ -1,5 +1,5 @@
 
-rm(list=ls())
+rm(list = ls())
 
 library(dplyr) 
 library(tidyr)
@@ -23,25 +23,37 @@ load( './input/Bio_Pars.RData')     # './1-Bio_Pars.R' with Biological Parameter
 
 # Fishing Mortality
 load( './input/Catch.RData')   # './2-Catch.R' with Catch and LFD data
+# Transform landings data to required shape
+catch <- corLFD |> dplyr::rename(gear = fleet, catch = number)
+catch$dl = 1
+catch$species = "Hake"
+catch$gear <- as.character(catch$gear)
 
 # SSB / Bio
 load( './input/Hake_SS_Data.RData')   # './scripts/WGBIE24.R' WGBIE assessment results
 
+# Species params ----
+
+sp <- bio_pars@species_params |>
+    select(species, w_mat, age_mat, w_max, a, b)
+
+# Biomass
 quantity <- 'biomass' # 'SSB'
-
 ss_biomass <- assessment[,quantity][assessment$Year %in% aver_y]*1e6  # SS biomass (tonnes to grams)
-
 obs_q <- sum(ss_biomass)/length(aver_y); obs_q/1e6 
 b_min <- lwf(4,a,b); b_min   # SS smallest size is 4 cm
 
-# Allometric params ----
-sp <- bio_pars@species_params |>
-    select(species, w_mat, age_mat, w_max, a, b)
 sp$biomass_observed <- obs_q
 sp$biomass_cutoff <- b_min
 
+# max size
+l_max = 1.1 * max(catch$length + catch$dl, na.rm = TRUE)
+sp$w_max = lwf(l_max, sp$a, sp$b)
+
+
+# Allometric params ----
 hake_model <- newAllometricParams(sp)
-plotSpectra(hake_model, resource = FALSE)
+plotSpectra(hake_model, power = 2, resource = FALSE)
 
 # Gears ----
 
@@ -49,9 +61,7 @@ gear_names <- Catch$fleet
 
 ### Double sigmoid selectivity initial parameters
 
-ng <- length( gear_names)
-
-gear_params(hake_model) <- data.frame(
+gp <- data.frame(
     gear = gear_names, species = "Hake", catchability = 1,
     sel_func = "double_sigmoid_length",
     l50 = c(       28.6, 30.7, 29.8, 14.8, 27.5, 30.3, 51.2, 54.9, 16.1),
@@ -59,10 +69,29 @@ gear_params(hake_model) <- data.frame(
     l50_right = c( 38.3, 33.6, 42.0, 20.6, 33.1, 35.6, 58.0, 54.4, 27.3),
     l25_right = c( 43.3, 45.0, 47.8, 27.0, 38.9, 45.9, 67.9, 60.8, 28.4))
 
+gp$yield_observed <- corLFDs$catch   # == Catch$catch; != LFDs$catch
 
-### Catch by gear
+gear_params(hake_model) <- gp
+initial_effort( hake_model) <- 1
 
-gear_params(hake_model)$yield_observed <- corLFDs$catch   # == Catch$catch; != LFDs$catch
+# Set catchability to get the observed yield
+yield <- getYieldGear(hake_model)[, 1]
+gp$catchability <- gp$yield_observed / yield
 
-gear_params( hake_model)$yield_observed/1e6
-sum(gear_params( hake_model)$yield_observed/1e6)
+# Single gear ----
+# Currently our code is restricted to work with a single gear
+# I'll pick the one with the largest l50_right
+# In future we might want to use survey data instead
+gp <- gp[gp$gear == "ptArt", ]
+gear_params(hake_model) <- gp
+catch <- catch[catch$gear == "ptArt", ]
+
+p <- tuneEcopath(hake_model, catch = catch,
+                 controls = c("growth",
+                              "diffusion",
+                              "fishing",
+                              "reproduction",
+                              "other",
+                              "match"))
+
+p <- matchCatch(hake_model, catch = catch)
