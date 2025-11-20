@@ -82,6 +82,13 @@ hake_model <- matchCatch(hake_model, catch = catch)
 
 plotYieldVsSize(hake_model, x_var = "Length", catch = catch)
 
+# Set metabolic loss rate ----
+# So far we ran the model without metabolic loss. If we now introduce this loss,
+# we have to increase the encounter rate to make up for this.
+species_params(hake_model)$ks <- bio_pars@species_params$ks
+ext_encounter(hake_model) <- ext_encounter(hake_model) +
+    metab(hake_model) / species_params(hake_model)$alpha
+
 # Add density dependencies ----
 # We now have a model whose steady state matches the landings data
 # But we still need to calibrate its sensitivity to changes away from
@@ -101,9 +108,9 @@ hake_model <- alignResource(hake_model) |>
 resource_level(hake_model) <- 1/2
 
 # Turn on cannibalism ----
-# I'll assume below that 17% of the total diet comes from cannibalism
+# I'll assume below that 14% of the total diet comes from cannibalism
 # You will get a warning if you try to increase this and we should discuss this.
-diet_matrix <- matrix(c(0.17, 0.83), ncol = 2,
+diet_matrix <- matrix(c(0.14, 0.86), ncol = 2,
                       dimnames = list(predator = "Hake",
                                       prey = c("Hake", "other")))
 
