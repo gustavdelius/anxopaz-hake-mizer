@@ -24,10 +24,12 @@ load( './input/Bio_Pars.RData')     # './1-Bio_Pars.R' with Biological Parameter
 # Fishing Mortality
 load( './input/Catch.RData')   # './2-Catch.R' with Catch and LFD data
 # Transform landings data to required shape
-catch <- corLFD |> dplyr::rename(gear = fleet, catch = number)
+catch <- corLFD |>
+    group_by(length) |>
+    summarise(catch = sum(number))
 catch$dl = 1
 catch$species = "Hake"
-catch$gear <- as.character(catch$gear)
+catch$gear = "Total"
 
 # SSB / Bio
 load( './input/Hake_SS_Data.RData')   # './scripts/WGBIE24.R' WGBIE assessment results
@@ -52,46 +54,33 @@ sp$w_max = lwf(l_max, sp$a, sp$b)
 
 
 # Allometric params ----
-hake_model <- newAllometricParams(sp)
+hake_model <- newAllometricParams(sp) |>
+    matchGrowth() |>
+    matchBiomasses()
 plotSpectra(hake_model, power = 2, resource = FALSE)
 
-# Gears ----
-
-gear_names <- Catch$fleet
-
-### Double sigmoid selectivity initial parameters
+# Fishing ----
 
 gp <- data.frame(
-    gear = gear_names, species = "Hake", catchability = 1,
-    sel_func = "double_sigmoid_length",
-    l50 = c(       28.6, 30.7, 29.8, 14.8, 27.5, 30.3, 51.2, 54.9, 16.1),
-    l25 = c(       23.8, 28.5, 27.4, 13.0, 26.6, 28.1, 47.5, 51.3, 13.5),
-    l50_right = c( 38.3, 33.6, 42.0, 20.6, 33.1, 35.6, 58.0, 54.4, 27.3),
-    l25_right = c( 43.3, 45.0, 47.8, 27.0, 38.9, 45.9, 67.9, 60.8, 28.4))
-
-gp$yield_observed <- corLFDs$catch   # == Catch$catch; != LFDs$catch
+    gear = "Total", species = "Hake", catchability = 1,
+    sel_func = "sigmoid_length",
+    l50 = 30,
+    l25 = 28,
+    yield_observed = sum(corLFDs$catch)
+)
 
 gear_params(hake_model) <- gp
-initial_effort( hake_model) <- 1
+initial_effort(hake_model) <- 1
 
 # Set catchability to get the observed yield
-yield <- getYieldGear(hake_model)[, 1]
+yield <- getYield(hake_model)
 gp$catchability <- gp$yield_observed / yield
-
-# Single gear ----
-# Currently our code is restricted to work with a single gear
-# I'll pick the one with the largest l50_right
-# In future we might want to use survey data instead
-gp <- gp[gp$gear == "ptArt", ]
 gear_params(hake_model) <- gp
-catch <- catch[catch$gear == "ptArt", ]
 
-p <- tuneEcopath(hake_model, catch = catch,
-                 controls = c("growth",
-                              "diffusion",
-                              "fishing",
-                              "reproduction",
-                              "other",
-                              "match"))
+hake_model <- matchCatch(hake_model, catch = catch)
 
-p <- matchCatch(hake_model, catch = catch)
+plotYieldVsSize(hake_model, x_var = "Length", catch = catch)
+
+hake_model@species_params$erepro
+
+plotGrowthCurves(hake_model)
